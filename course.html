@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Đang học — Học Online</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23ffd60a%22 rx=%2220%22/><text x=%2250%22 y=%2270%22 font-size=%2260%22 text-anchor=%22middle%22 font-family=%22Arial Black%22 fill=%22%23000%22>H</text></svg>" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body data-page="course">
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="logo">
+        <span class="logo-mark">H</span>
+        <span>Học Online</span>
+      </a>
+      <div class="header-actions">
+        <button class="btn-reset" id="btn-reset" title="Xóa toàn bộ tiến độ học">↺ Reset tiến độ</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="course-layout" id="course-layout">
+
+    <button class="mobile-toggle" id="mobile-toggle">☰ Danh sách bài học</button>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-title">Khóa học</div>
+      <div class="sidebar-course-name" id="sidebar-course-name">Đang tải...</div>
+
+      <div class="progress-block">
+        <div class="progress-label">
+          <span id="progress-count">0/0 bài</span>
+          <span class="progress-percent" id="progress-percent">0%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+        </div>
+      </div>
+
+      <ul class="lesson-list" id="lesson-list"></ul>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <section class="main-content">
+      <div class="video-wrap" id="video-wrap">
+        <div class="video-placeholder">
+          <div class="icon">⏳</div>
+          <div>Đang tải video...</div>
+        </div>
+      </div>
+
+      <div class="lesson-content">
+        <div class="lesson-header">
+          <h1 class="lesson-title-big" id="lesson-title-big">Đang tải...</h1>
+          <span class="lesson-badge" id="lesson-badge">● Đang học</span>
+        </div>
+
+        <p class="lesson-description" id="lesson-description"></p>
+
+        <div class="timer-info" id="timer-info">
+          <span class="timer-icon">⏱</span>
+          <span>Đang chuẩn bị...</span>
+        </div>
+
+        <div class="action-row">
+          <div class="nav-buttons">
+            <button class="btn btn-secondary" id="btn-prev">← Bài trước</button>
+            <button class="btn btn-secondary" id="btn-next">Bài sau →</button>
+          </div>
+          <button class="btn btn-primary" id="btn-done" disabled>Hoàn thành bài học</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <footer class="site-footer">
+    Website học trực tuyến · Host miễn phí trên GitHub Pages
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>
