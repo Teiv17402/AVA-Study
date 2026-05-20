@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quản trị — Học Online</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23ffd60a%22 rx=%2220%22/><text x=%2250%22 y=%2270%22 font-size=%2260%22 text-anchor=%22middle%22 font-family=%22Arial Black%22 fill=%22%23000%22>H</text></svg>" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="logo">
+        <span class="logo-mark">H</span>
+        <span>Học Online</span>
+      </a>
+      <div class="header-actions" id="header-actions">
+        <span class="spinner"></span>
+      </div>
+    </div>
+  </header>
+
+  <main class="admin-layout">
+    <div class="admin-header">
+      <div>
+        <h1 class="page-title">⚙ Trang <span class="accent">Quản trị</span></h1>
+        <p class="page-subtitle">Quản lý khóa học, bài học và người dùng</p>
+      </div>
+    </div>
+
+    <div class="admin-tabs">
+      <button class="admin-tab active" data-tab="courses">📚 Khóa học</button>
+      <button class="admin-tab" data-tab="users">👥 Người dùng</button>
+    </div>
+
+    <!-- TAB COURSES -->
+    <section class="admin-section active" id="section-courses">
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <h2 class="admin-card-title">Danh sách khóa học</h2>
+          <button class="btn btn-primary btn-sm" id="btn-new-course">+ Thêm khóa học</button>
+        </div>
+        <div id="courses-container">
+          <div class="loading-screen">
+            <div class="spinner"></div>
+            <p>Đang tải...</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB USERS -->
+    <section class="admin-section" id="section-users">
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <h2 class="admin-card-title">Người dùng đã đăng nhập</h2>
+        </div>
+        <div id="users-container">
+          <div class="loading-screen">
+            <div class="spinner"></div>
+            <p>Đang tải...</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: COURSE -->
+  <div class="modal-overlay" id="modal-course">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modal-course-title">Khóa học</h2>
+        <button class="modal-close" data-close>×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row single">
+          <div class="form-group">
+            <label>Tên khóa học</label>
+            <input type="text" id="course-title" placeholder="VD: Khóa Excel cơ bản" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Cấp độ</label>
+            <input type="text" id="course-level" placeholder="Cơ bản / Trung bình / Nâng cao" />
+          </div>
+          <div class="form-group">
+            <label>Thứ tự hiển thị</label>
+            <input type="number" id="course-order" placeholder="1" min="0" />
+          </div>
+        </div>
+        <div class="form-row single">
+          <div class="form-group">
+            <label>Mô tả ngắn</label>
+            <textarea id="course-desc" placeholder="Mô tả nội dung khóa học..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close>Hủy</button>
+        <button class="btn btn-primary" id="btn-save-course">Lưu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: LESSON -->
+  <div class="modal-overlay" id="modal-lesson">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modal-lesson-title">Bài học</h2>
+        <button class="modal-close" data-close>×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row single">
+          <div class="form-group">
+            <label>Tên bài học</label>
+            <input type="text" id="lesson-title" placeholder="VD: Bài 1: Giới thiệu" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Google Drive File ID</label>
+            <input type="text" id="lesson-drive" placeholder="VD: 1abc...XYZ" />
+            <div class="form-help">
+              Lấy từ link share của video Google Drive. Trong link
+              <code>drive.google.com/file/d/<strong>FILE_ID</strong>/view</code>,
+              copy phần giữa <code>/d/</code> và <code>/view</code>.
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Thời lượng (giây)</label>
+            <input type="number" id="lesson-duration" placeholder="VD: 600 (= 10 phút)" min="0" />
+            <div class="form-help">
+              10 phút = 600. 5 phút 30 giây = 330. Người học phải xem 80% thời lượng này.
+            </div>
+          </div>
+        </div>
+        <div class="form-row single">
+          <div class="form-group">
+            <label>Mô tả bài học</label>
+            <textarea id="lesson-desc" placeholder="Nội dung bài học..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close>Hủy</button>
+        <button class="btn btn-primary" id="btn-save-lesson">Lưu</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    Trang quản trị · Chỉ dành cho admin
+  </footer>
+
+  <script type="module" src="assets/app.js"></script>
+  <script type="module">
+    import { initAdminPage } from "./assets/admin.js";
+    initAdminPage();
+  </script>
+</body>
+</html>

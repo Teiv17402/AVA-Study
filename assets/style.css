@@ -1,5 +1,5 @@
 /* ============================================
-   THEME ĐEN - VÀNG
+   THEME ĐEN - VÀNG  v2
    ============================================ */
 :root {
   --bg: #0a0a0a;
@@ -16,6 +16,7 @@
   --accent-soft: rgba(255, 214, 10, 0.12);
   --success: #4ade80;
   --danger: #ef4444;
+  --info: #3b82f6;
   --radius: 12px;
   --radius-sm: 8px;
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
@@ -23,11 +24,7 @@
   --transition: 0.2s ease;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
 html, body {
   background: var(--bg);
@@ -39,21 +36,27 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-a {
-  color: var(--accent);
-  text-decoration: none;
-  transition: var(--transition);
-}
-
+a { color: var(--accent); text-decoration: none; transition: var(--transition); }
 a:hover { color: var(--accent-dark); }
 
-button {
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+
+input, select, textarea {
   font-family: inherit;
-  cursor: pointer;
-  border: none;
-  background: none;
-  color: inherit;
+  font-size: 14px;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  width: 100%;
+  transition: var(--transition);
 }
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+textarea { resize: vertical; min-height: 80px; }
 
 /* ============================================
    HEADER
@@ -61,7 +64,7 @@ button {
 .site-header {
   background: var(--bg-soft);
   border-bottom: 1px solid var(--border);
-  padding: 16px 24px;
+  padding: 14px 24px;
   position: sticky;
   top: 0;
   z-index: 100;
@@ -98,22 +101,133 @@ button {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
-.btn-reset {
+.btn-header {
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text-soft);
   padding: 8px 14px;
   border-radius: var(--radius-sm);
   font-size: 13px;
+  font-weight: 600;
+  transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-header:hover { border-color: var(--accent); color: var(--accent); }
+
+.btn-header.danger:hover { border-color: var(--danger); color: var(--danger); }
+
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 5px 12px 5px 5px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.user-chip img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.user-chip .badge {
+  background: var(--accent);
+  color: #000;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ============================================
+   AUTH (LOGIN PAGE)
+   ============================================ */
+.auth-body {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255, 214, 10, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(255, 214, 10, 0.06) 0%, transparent 50%),
+    var(--bg);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px 32px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.auth-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  background: var(--accent);
+  color: #000;
+  border-radius: 16px;
+  font-size: 32px;
+  font-weight: 900;
+  margin-bottom: 24px;
+}
+
+.auth-card h1 {
+  font-size: 24px;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.auth-card h1 span { color: var(--accent); }
+
+.auth-subtitle {
+  color: var(--text-soft);
+  margin-bottom: 32px;
+}
+
+.btn-google {
+  width: 100%;
+  background: #fff;
+  color: #000;
+  padding: 14px 20px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   transition: var(--transition);
 }
 
-.btn-reset:hover {
-  border-color: var(--danger);
-  color: var(--danger);
+.btn-google:hover {
+  background: #f5f5f5;
+  transform: translateY(-1px);
+}
+
+.btn-google svg { width: 20px; height: 20px; }
+
+.auth-note {
+  margin-top: 24px;
+  font-size: 12px;
+  color: var(--text-mute);
 }
 
 /* ============================================
@@ -130,10 +244,7 @@ button {
   font-weight: 800;
   margin-bottom: 8px;
 }
-
-.page-title .accent {
-  color: var(--accent);
-}
+.page-title .accent { color: var(--accent); }
 
 .page-subtitle {
   color: var(--text-soft);
@@ -263,8 +374,8 @@ button {
   padding: 20px;
   height: fit-content;
   position: sticky;
-  top: 88px;
-  max-height: calc(100vh - 110px);
+  top: 80px;
+  max-height: calc(100vh - 100px);
   overflow-y: auto;
 }
 
@@ -299,10 +410,7 @@ button {
   margin-bottom: 8px;
 }
 
-.progress-percent {
-  color: var(--accent);
-  font-weight: 700;
-}
+.progress-percent { color: var(--accent); font-weight: 700; }
 
 .progress-bar {
   height: 8px;
@@ -335,19 +443,14 @@ button {
   border: 1px solid transparent;
 }
 
-.lesson-item:hover:not(.locked) {
-  background: var(--bg-hover);
-}
+.lesson-item:hover:not(.locked) { background: var(--bg-hover); }
 
 .lesson-item.active {
   background: var(--accent-soft);
   border-color: var(--accent);
 }
 
-.lesson-item.locked {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+.lesson-item.locked { opacity: 0.5; cursor: not-allowed; }
 
 .lesson-status {
   flex-shrink: 0;
@@ -362,24 +465,15 @@ button {
   color: var(--text-mute);
 }
 
-.lesson-item.completed .lesson-status {
-  background: var(--accent);
-  color: #000;
-}
-
+.lesson-item.completed .lesson-status,
 .lesson-item.active .lesson-status {
   background: var(--accent);
   color: #000;
 }
 
-.lesson-item.locked .lesson-status {
-  background: var(--bg-card);
-}
+.lesson-item.locked .lesson-status { background: var(--bg-card); }
 
-.lesson-info {
-  flex: 1;
-  min-width: 0;
-}
+.lesson-info { flex: 1; min-width: 0; }
 
 .lesson-name {
   font-size: 14px;
@@ -391,14 +485,9 @@ button {
   white-space: nowrap;
 }
 
-.lesson-item.locked .lesson-name {
-  color: var(--text-mute);
-}
+.lesson-item.locked .lesson-name { color: var(--text-mute); }
 
-.lesson-duration {
-  font-size: 12px;
-  color: var(--text-mute);
-}
+.lesson-duration { font-size: 12px; color: var(--text-mute); }
 
 /* ============================================
    MAIN CONTENT (VIDEO + INFO)
@@ -439,11 +528,7 @@ button {
   padding: 24px;
 }
 
-.video-placeholder .icon {
-  font-size: 64px;
-  color: var(--accent);
-  opacity: 0.5;
-}
+.video-placeholder .icon { font-size: 64px; color: var(--accent); opacity: 0.5; }
 
 .lesson-content {
   background: var(--bg-soft);
@@ -509,9 +594,7 @@ button {
   color: var(--success);
 }
 
-.timer-icon {
-  font-size: 20px;
-}
+.timer-icon { font-size: 20px; }
 
 .action-row {
   display: flex;
@@ -542,16 +625,10 @@ button {
   color: #000;
 }
 
-.btn-primary:hover {
-  background: var(--accent-dark);
-  transform: translateY(-1px);
-}
-
+.btn-primary:hover { background: var(--accent-dark); transform: translateY(-1px); }
 .btn-primary:disabled {
-  background: var(--border);
-  color: var(--text-mute);
-  cursor: not-allowed;
-  transform: none;
+  background: var(--border); color: var(--text-mute);
+  cursor: not-allowed; transform: none;
 }
 
 .btn-secondary {
@@ -560,15 +637,18 @@ button {
   border: 1px solid var(--border);
 }
 
-.btn-secondary:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
+.btn-secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
-.btn-secondary:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+.btn-danger:hover { background: rgba(239, 68, 68, 0.25); border-color: var(--danger); }
+
+.btn-sm { padding: 6px 12px; font-size: 12px; }
 
 /* ============================================
    MOBILE MENU TOGGLE
@@ -594,12 +674,275 @@ button {
   text-align: center;
   padding: 80px 24px;
   color: var(--text-mute);
+  grid-column: 1 / -1;
 }
 
 .empty-state .icon {
   font-size: 64px;
   color: var(--accent);
   margin-bottom: 16px;
+}
+
+.empty-state p { margin-bottom: 16px; }
+
+/* ============================================
+   ADMIN PAGE
+   ============================================ */
+.admin-layout {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-soft);
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  margin-bottom: 24px;
+  width: fit-content;
+  flex-wrap: wrap;
+}
+
+.admin-tab {
+  padding: 10px 18px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-soft);
+  transition: var(--transition);
+}
+
+.admin-tab:hover { color: var(--text); }
+
+.admin-tab.active {
+  background: var(--accent);
+  color: #000;
+}
+
+.admin-section { display: none; }
+.admin-section.active { display: block; }
+
+.admin-card {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 16px;
+}
+
+.admin-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-card-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.admin-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Lesson row in admin */
+.admin-lesson-row {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.admin-lesson-row .num {
+  background: var(--accent);
+  color: #000;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.admin-lesson-info { min-width: 0; }
+.admin-lesson-info .name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-lesson-info .meta {
+  font-size: 12px;
+  color: var(--text-mute);
+}
+
+/* Form */
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.form-row.single { grid-template-columns: 1fr; }
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-soft);
+  margin-bottom: 6px;
+}
+
+.form-help {
+  font-size: 12px;
+  color: var(--text-mute);
+  margin-top: 4px;
+}
+
+.form-help code {
+  background: var(--bg-card);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--accent);
+}
+
+/* Users table */
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.users-table th, .users-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.users-table th {
+  background: var(--bg-card);
+  font-weight: 700;
+  color: var(--text-soft);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.users-table tr:hover td { background: var(--bg-hover); }
+
+.role-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.role-badge.admin { background: var(--accent); color: #000; }
+.role-badge.user { background: var(--border); color: var(--text-soft); }
+
+/* ============================================
+   MODAL
+   ============================================ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+.modal-overlay.active { display: flex; }
+
+.modal {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h2 { font-size: 18px; }
+
+.modal-close {
+  background: transparent;
+  font-size: 24px;
+  color: var(--text-mute);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-close:hover { background: var(--bg-card); color: var(--text); }
+
+.modal-body { padding: 24px; }
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* ============================================
+   LOADING / SPINNER
+   ============================================ */
+.spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  gap: 16px;
+  color: var(--text-mute);
 }
 
 /* ============================================
@@ -616,93 +959,51 @@ button {
     order: 2;
   }
 
-  .main-content {
-    order: 1;
-  }
+  .main-content { order: 1; }
 
-  .mobile-toggle {
-    display: block;
-    order: 1;
-  }
+  .mobile-toggle { display: block; order: 1; }
 
-  .sidebar.collapsed {
-    display: none;
-  }
+  .sidebar.collapsed { display: none; }
+
+  .form-row { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 640px) {
-  .container {
-    padding: 20px 16px;
-  }
+  .container, .admin-layout { padding: 20px 16px; }
 
-  .course-layout {
-    padding: 16px;
-  }
+  .course-layout { padding: 16px; }
 
-  .page-title {
-    font-size: 24px;
-  }
+  .page-title { font-size: 24px; }
 
-  .lesson-title-big {
-    font-size: 20px;
-  }
+  .lesson-title-big { font-size: 20px; }
 
-  .header-inner {
-    padding: 0 8px;
-  }
+  .header-inner { padding: 0 4px; }
 
-  .logo {
-    font-size: 16px;
-  }
+  .logo { font-size: 16px; }
 
-  .course-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
+  .course-grid { grid-template-columns: 1fr; gap: 16px; }
 
-  .action-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
+  .action-row { flex-direction: column; align-items: stretch; }
 
-  .nav-buttons {
-    width: 100%;
-  }
+  .nav-buttons { width: 100%; }
 
-  .nav-buttons .btn {
-    flex: 1;
-    justify-content: center;
-  }
+  .nav-buttons .btn { flex: 1; justify-content: center; }
 
-  .btn {
-    width: 100%;
-    justify-content: center;
-  }
+  .btn { width: 100%; justify-content: center; }
+
+  .user-chip .name { display: none; }
+
+  .users-table th:nth-child(3),
+  .users-table td:nth-child(3) { display: none; }
 }
 
-/* ============================================
-   SCROLLBAR
-   ============================================ */
-.sidebar::-webkit-scrollbar {
-  width: 6px;
-}
+/* Scrollbar */
+.sidebar::-webkit-scrollbar { width: 6px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.sidebar::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
-.sidebar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.sidebar::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 3px;
-}
-
-.sidebar::-webkit-scrollbar-thumb:hover {
-  background: var(--accent);
-}
-
-/* ============================================
-   FOOTER
-   ============================================ */
+/* Footer */
 .site-footer {
   border-top: 1px solid var(--border);
   padding: 24px;
