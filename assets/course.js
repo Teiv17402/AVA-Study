@@ -263,4 +263,53 @@ function updateTimerUI() {
   if (linkManual) {
     linkManual.addEventListener("click", async (e) => {
       e.preventDefault();
-      if (confirm("Bạn đã xem hết hoặc tua đến cuối video chưa?\n\nBấm OK để đánh dấu hoàn thành bài hxE1
+      if (confirm("Bạn đã xem hết hoặc tua đến cuối video chưa?\n\nBấm OK để đánh dấu hoàn thành bài học này.")) {
+        await completeCurrentLesson(true);
+      }
+    });
+  }
+}
+
+async function completeCurrentLesson(forceOverride = false) {
+  const lesson = currentLessons[currentLessonIndex];
+  if (completedIds.includes(lesson.id)) {
+    // Đã xong rồi, chuyển sang bài kế
+    const nextIdx = currentLessonIndex + 1;
+    if (nextIdx < currentLessons.length) loadLesson(nextIdx);
+    return;
+  }
+
+  const admin = isAdmin(currentUser);
+  const enoughTime = videoElapsed >= canCompleteAt;
+
+  if (!admin && !enoughTime && !forceOverride) {
+    flashMessage("Bạn cần xem đủ thời lượng video trước!", "error");
+    return;
+  }
+
+  try {
+    completedIds = await markLessonCompleted(currentUser.uid, lesson.id);
+    updateTimerUI();
+    renderSidebar();
+
+    const nextIdx = currentLessons.length + 1;
+    if (nextIdx < currentLessons.length) {
+      flashMessage("✓ Đã hoàn thành! Chuyển sang bài tiếp...", "success");
+      setTimeout(() => loadLesson(nextIdx), 900);
+    } else {
+      flashMessage("🎉 Chúc mừng! Bạn đã hoàn thành khóa học!", "success");
+    }
+  } catch (err) {
+    flashMessage("Lỗi lưu tiến độ: " + err.message, "error");
+  }
+}
+
+function gotoPrev() {
+  if (currentLessonIndex > 0) loadLesson(currentLessonIndex - 1);
+}
+function gotoNext() {
+  const next = currentLessonIndex + 1;
+  if (next < currentLessons.length && isLessonUnlocked(currentLessons, next, completedIds)) {
+    loadLesson(next);
+  }
+}
