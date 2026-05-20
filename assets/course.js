@@ -263,4 +263,4 @@ function updateTimerUI() {
   if (linkManual) {
     linkManual.addEventListener("click", async (e) => {
       e.preventDefault();
-      if (confirm("Bạn đã xem hết hoặc tua đến cuối video chưa?\n\nBấm OK để đánh dấu hoàn thành bài h�
+      if (confirm("Bạn đã xem hết hoặc tua đến cuối video chưa?\n\nBấm OK để đánh dấu hoàn thành bài h 
