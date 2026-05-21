@@ -13,7 +13,7 @@ import {
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     await ensureUserDoc(user);
-    location.href = "index.html";
+    location.href = "home.html";
   }
 });
 
@@ -26,7 +26,7 @@ btn.addEventListener("click", async () => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     await ensureUserDoc(result.user);
-    location.href = "index.html";
+    location.href = "home.html";
   } catch (err) {
     btn.disabled = false;
     btnText.textContent = "Đăng nhập bằng Google";
