@@ -108,7 +108,8 @@ export function waitForAuth() {
 export async function requireAuth() {
   const user = await waitForAuth();
   if (!user) {
-    location.href = "login.html";
+    // Chưa login → đẩy về landing page (có 2 button: đăng nhập / đăng ký test)
+    location.href = "index.html";
     return null;
   }
   await ensureUserDoc(user);
@@ -123,7 +124,7 @@ export async function requireAdmin() {
   if (!user) return null;
   if (!isAdmin(user)) {
     alert("Bạn không có quyền truy cập trang này.");
-    location.href = "index.html";
+    location.href = "home.html";
     return null;
   }
   return user;
@@ -131,7 +132,8 @@ export async function requireAdmin() {
 
 export async function logout() {
   await signOut(auth);
-  location.href = "login.html";
+  // Đăng xuất xong về landing page
+  location.href = "index.html";
 }
 
 /* ---------- Firestore data helpers ---------- */
