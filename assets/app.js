@@ -54,6 +54,11 @@ export function formatDuration(seconds) {
   return `${m}p ${s}s`;
 }
 
+export function formatVnd(amount) {
+  if (amount == null) return "";
+  return amount.toLocaleString("vi-VN") + "đ";
+}
+
 export function flashMessage(text, type = "info") {
   let el = document.getElementById("flash-message");
   if (!el) {
@@ -72,15 +77,29 @@ export function flashMessage(text, type = "info") {
   el._t = setTimeout(() => { el.style.display = "none"; }, 2800);
 }
 
-/* ---------- Lesson unlock + 24h timer logic ---------- */
+/* ---------- Lesson unlock + 24h timer + VIP logic ---------- */
 export const LESSON_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Trạng thái 1 bài:
+ *   'completed'           — đã hoàn thành
+ *   'available'           — đang mở
+ *   'locked-prerequisite' — chưa xong bài trước
+ *   'locked-expired'      — quá 24h chưa làm
+ *   'locked-vip'          — VIP, chưa thanh toán
+ */
 export function getLessonStatus(lessons, lessonIndex, progress) {
   const lesson = lessons[lessonIndex];
   const completed = progress.completed || [];
   const unlockedAt = progress.unlockedAt || {};
+  const paidLessons = progress.paidLessons || [];
 
   if (completed.includes(lesson.id)) return 'completed';
+
+  // VIP check: bài VIP + user chưa pay → locked-vip
+  if (lesson.isVip && !paidLessons.includes(lesson.id)) {
+    return 'locked-vip';
+  }
 
   if (lessonIndex === 0) {
     return checkExpired(unlockedAt[lesson.id]);
@@ -120,7 +139,7 @@ export function isLessonUnlocked(lessons, lessonIndex, completedIds, progress) {
     const prev = lessons[lessonIndex - 1];
     return completedIds.includes(prev.id);
   }
-  const prog = progress || { completed: completedIds || [], unlockedAt: {} };
+  const prog = progress || { completed: completedIds || [], unlockedAt: {}, paidLessons: [] };
   const status = getLessonStatus(lessons, lessonIndex, prog);
   return status === 'completed' || status === 'available';
 }
