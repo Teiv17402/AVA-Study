@@ -11,6 +11,7 @@ import {
   fetchAllProgress,
   adminResetLessonTimer,
   fetchPendingPayments,
+  fetchAllPayments,
   approvePayment,
   approveCoursePayment,
   rejectPayment,
@@ -49,6 +50,7 @@ function setupTabs() {
       const tabName = tab.dataset.tab;
       document.getElementById(`section-${tabName}`).classList.add("active");
       if (tabName === "users") loadUsers();
+      if (tabName === "payments") loadPaymentsHistory();
     });
   });
 
@@ -341,6 +343,7 @@ async function loadUsers() {
               <th>Vai trò</th>
               <th>Bài đã học</th>
               <th>Bài VIP đã mua</th>
+              <th>Khóa VIP đã mua</th>
               <th>Bài hết hạn</th>
               <th>Đăng nhập gần nhất</th>
             </tr>
@@ -350,15 +353,17 @@ async function loadUsers() {
               const prog = progressMap[u.id];
               const completedCount = (prog && prog.completed) ? prog.completed.length : 0;
               const paidCount = (prog && prog.paidLessons) ? prog.paidLessons.length : 0;
+              const paidCoursesCount = (prog && prog.paidCourses) ? prog.paidCourses.length : 0;
               const lockedCount = (lockedItems.byUser[u.id] || []).length;
               const lastLogin = u.lastLogin ? new Date(u.lastLogin.seconds * 1000).toLocaleString("vi-VN") : "—";
               return `
-                <tr>
+                <tr class="user-row" data-uid="${escapeHtml(u.id)}" style="cursor:pointer">
                   <td>${escapeHtml(u.displayName || "—")}</td>
                   <td>${escapeHtml(u.email || "—")}</td>
                   <td><span class="role-badge ${u.role === "admin" ? "admin" : "user"}">${u.role || "user"}</span></td>
                   <td>${completedCount} bài</td>
                   <td>${paidCount > 0 ? `<span style="color:var(--accent);font-weight:600">${paidCount} bài</span>` : "—"}</td>
+                  <td>${paidCoursesCount > 0 ? `<span style="color:#d4af6e;font-weight:700">👑 ${paidCoursesCount} khóa</span>` : "—"}</td>
                   <td>${lockedCount > 0 ? `<span style="color:var(--danger);font-weight:600">${lockedCount} hết hạn</span>` : "—"}</td>
                   <td>${lastLogin}</td>
                 </tr>
@@ -436,6 +441,16 @@ async function loadUsers() {
         </div>
       </div>
     `;
+
+    // Bind user row click → show detail modal
+    c.querySelectorAll('.user-row').forEach(row => {
+      row.addEventListener("click", () => {
+        const uid = row.dataset.uid;
+        const u = users.find(x => x.id === uid);
+        const prog = progressMap[uid];
+        showUserDetail(u, prog);
+      });
+    });
 
     // Bind payment buttons
     c.querySelectorAll('[data-payment-action]').forEach(btn => {
@@ -546,4 +561,197 @@ function formatExpiredAgo(unlockTime) {
   const hours = Math.floor((ago % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
   if (days > 0) return `${days} ngày${hours > 0 ? ` ${hours}h` : ""} trước`;
   return `${hours}h trước`;
+}
+
+
+// ============================================
+// USER DETAIL MODAL
+// ============================================
+function showUserDetail(user, prog) {
+  if (!user) return;
+  const modal = document.getElementById("modal-user-detail");
+  if (!modal) return;
+
+  const completed = (prog && prog.completed) || [];
+  const paidLessons = (prog && prog.paidLessons) || [];
+  const paidCourses = (prog && prog.paidCourses) || [];
+
+  // Lookup helpers
+  const lessonMap = {}; // id → {title, courseTitle}
+  const courseMap = {}; // id → title
+  courses.forEach(course => {
+    courseMap[course.id] = course.title;
+    (course.lessons || []).forEach(l => {
+      lessonMap[l.id] = { title: l.title, courseTitle: course.title };
+    });
+  });
+
+  const renderList = (ids, getInfo, emptyText) => {
+    if (!ids.length) return `<p style="color:var(--text-mute);font-style:italic">${emptyText}</p>`;
+    return `<ul class="detail-list">` + ids.map(id => {
+      const info = getInfo(id);
+      return `<li>${info}</li>`;
+    }).join("") + `</ul>`;
+  };
+
+  document.getElementById("modal-user-detail-title").textContent = "Chi tiết: " + (user.displayName || user.email || "—");
+  document.getElementById("modal-user-detail-body").innerHTML = `
+    <div class="user-detail-header">
+      <div><strong>Email:</strong> ${escapeHtml(user.email || "—")}</div>
+      <div><strong>Vai trò:</strong> <span class="role-badge ${user.role === "admin" ? "admin" : "user"}">${user.role || "user"}</span></div>
+      <div><strong>Đăng nhập gần nhất:</strong> ${user.lastLogin ? new Date(user.lastLogin.seconds * 1000).toLocaleString("vi-VN") : "—"}</div>
+    </div>
+
+    <div class="detail-section">
+      <h3>👑 Khóa VIP đã mua (${paidCourses.length})</h3>
+      ${renderList(paidCourses, id => {
+        const title = courseMap[id] || `<em>Khóa đã xóa</em> (id: ${escapeHtml(id)})`;
+        return `<strong style="color:var(--accent)">${escapeHtml(title)}</strong>`;
+      }, "Chưa mua khóa VIP nào.")}
+    </div>
+
+    <div class="detail-section">
+      <h3>📖 Bài VIP đã mua (${paidLessons.length})</h3>
+      ${renderList(paidLessons, id => {
+        const info = lessonMap[id];
+        if (info) return `<strong>${escapeHtml(info.title)}</strong> <span style="color:var(--text-mute)">— ${escapeHtml(info.courseTitle)}</span>`;
+        return `<em>Bài đã xóa</em> (id: ${escapeHtml(id)})`;
+      }, "Chưa mua bài VIP nào.")}
+    </div>
+
+    <div class="detail-section">
+      <h3>✓ Bài đã hoàn thành (${completed.length})</h3>
+      ${renderList(completed, id => {
+        const info = lessonMap[id];
+        if (info) return `${escapeHtml(info.title)} <span style="color:var(--text-mute)">— ${escapeHtml(info.courseTitle)}</span>`;
+        return `<em>Bài đã xóa</em>`;
+      }, "Chưa hoàn thành bài nào.")}
+    </div>
+  `;
+  modal.classList.add("active");
+}
+
+// ============================================
+// LỊCH SỬ THANH TOÁN
+// ============================================
+async function loadPaymentsHistory() {
+  const c = document.getElementById("payments-history-container");
+  try {
+    const payments = await fetchAllPayments();
+
+    const approved = payments.filter(p => p.status === "approved");
+    const pending = payments.filter(p => p.status === "pending");
+    const rejected = payments.filter(p => p.status === "rejected");
+
+    // Tổng doanh thu (approved)
+    const totalRevenue = approved.reduce((s, p) => s + (p.amount || 0), 0);
+
+    // Doanh thu tháng này
+    const now = new Date();
+    const startMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000;
+    const monthRevenue = approved
+      .filter(p => p.createdAt && p.createdAt.seconds >= startMonth)
+      .reduce((s, p) => s + (p.amount || 0), 0);
+
+    c.innerHTML = `
+      <div class="revenue-stats">
+        <div class="stat-card">
+          <div class="stat-label">Tổng doanh thu</div>
+          <div class="stat-value accent">${formatVnd(totalRevenue)}</div>
+          <div class="stat-sub">${approved.length} đơn đã duyệt</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Doanh thu tháng này</div>
+          <div class="stat-value">${formatVnd(monthRevenue)}</div>
+          <div class="stat-sub">Từ ${now.toLocaleDateString("vi-VN", {month:"long", year:"numeric"})}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Đang chờ duyệt</div>
+          <div class="stat-value warn">${pending.length}</div>
+          <div class="stat-sub">đơn pending</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Đã từ chối</div>
+          <div class="stat-value mute">${rejected.length}</div>
+          <div class="stat-sub">đơn rejected</div>
+        </div>
+      </div>
+
+      <div class="payments-filter">
+        <button class="filter-btn active" data-filter="all">Tất cả (${payments.length})</button>
+        <button class="filter-btn" data-filter="approved">Đã duyệt (${approved.length})</button>
+        <button class="filter-btn" data-filter="pending">Chờ duyệt (${pending.length})</button>
+        <button class="filter-btn" data-filter="rejected">Từ chối (${rejected.length})</button>
+      </div>
+
+      <div id="payments-history-list">
+        ${renderPaymentsRows(payments)}
+      </div>
+    `;
+
+    // Bind filter buttons
+    c.querySelectorAll(".filter-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        c.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        const filter = btn.dataset.filter;
+        const list = filter === "all" ? payments : payments.filter(p => p.status === filter);
+        document.getElementById("payments-history-list").innerHTML = renderPaymentsRows(list);
+      });
+    });
+
+    const refresh = document.getElementById("btn-refresh-history");
+    if (refresh) refresh.addEventListener("click", loadPaymentsHistory);
+  } catch (err) {
+    c.innerHTML = `<p style="color:#ef4444">Lỗi: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function renderPaymentsRows(payments) {
+  if (!payments.length) return `<p style="color:var(--text-mute);font-style:italic;padding:20px;text-align:center">Không có thanh toán nào.</p>`;
+  return `
+    <div style="overflow-x:auto">
+      <table class="users-table">
+        <thead>
+          <tr>
+            <th>Ngày</th>
+            <th>User</th>
+            <th>Loại</th>
+            <th>Đối tượng</th>
+            <th>Số tiền</th>
+            <th>Nội dung CK</th>
+            <th>Trạng thái</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${payments.map(p => {
+            const created = p.createdAt ? new Date(p.createdAt.seconds * 1000).toLocaleString("vi-VN") : "—";
+            const isCourse = p.type === "course";
+            const typeBadge = isCourse
+              ? `<span class="payment-type-badge course">👑 KHÓA</span>`
+              : `<span class="payment-type-badge lesson">📖 BÀI</span>`;
+            const target = isCourse
+              ? escapeHtml(p.courseTitle || "—")
+              : `${escapeHtml(p.courseTitle || "—")} <span style="color:var(--text-mute)">/ ${escapeHtml(p.lessonTitle || "—")}</span>`;
+            const statusBadge = {
+              approved: '<span class="status-badge success">✓ Đã duyệt</span>',
+              pending: '<span class="status-badge warn">⏳ Chờ duyệt</span>',
+              rejected: '<span class="status-badge danger">✗ Từ chối</span>'
+            }[p.status] || p.status;
+            return `
+              <tr>
+                <td style="white-space:nowrap;font-size:12px">${created}</td>
+                <td>${escapeHtml(p.userEmail || "—")}</td>
+                <td>${typeBadge}</td>
+                <td>${target}</td>
+                <td style="font-weight:600;color:var(--accent)">${formatVnd(p.amount)}</td>
+                <td><code style="font-size:11px">${escapeHtml(p.transferContent)}</code></td>
+                <td>${statusBadge}</td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
