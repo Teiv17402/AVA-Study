@@ -88,6 +88,20 @@
             <textarea id="course-desc" placeholder="Mô tả nội dung khóa học..."></textarea>
           </div>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="course-is-vip" style="width:auto" />
+              <span>👑 Đánh dấu cả khóa là VIP (toàn bộ bài cần thanh toán)</span>
+            </label>
+            <div class="form-help">User mua 1 lần → mở toàn bộ bài trong khóa.</div>
+          </div>
+          <div class="form-group">
+            <label>Giá khóa VIP (VNĐ)</label>
+            <input type="number" id="course-price" placeholder="VD: 299000" min="0" />
+            <div class="form-help">Để trống = dùng giá mặc định 99.000đ.</div>
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-close>Hủy</button>
