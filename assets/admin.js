@@ -8,19 +8,21 @@ import {
   updateCourse,
   deleteCourse,
   fetchAllUsers,
-  fetchAllProgress
+  fetchAllProgress,
+  adminResetLessonTimer
 } from "./firebase.js";
 import {
   escapeHtml,
   formatDuration,
   flashMessage,
-  renderHeader
+  renderHeader,
+  getLessonStatus
 } from "./app.js";
 
 let currentUser = null;
 let courses = [];
 let editingCourseId = null;
-let editingLesson = null; // { courseId, lessonIndex } — null nếu đang add mới
+let editingLesson = null;
 
 export async function initAdminPage() {
   currentUser = await requireAdmin();
@@ -32,7 +34,6 @@ export async function initAdminPage() {
   await refreshCourses();
 }
 
-/* ---------- TABS ---------- */
 function setupTabs() {
   document.querySelectorAll(".admin-tab").forEach(tab => {
     tab.addEventListener("click", () => {
@@ -48,7 +49,6 @@ function setupTabs() {
   document.getElementById("btn-new-course").addEventListener("click", () => openCourseModal());
 }
 
-/* ---------- COURSES ---------- */
 async function refreshCourses() {
   try {
     courses = await fetchCourses();
@@ -116,7 +116,6 @@ function renderCourses() {
     `;
   }).join("");
 
-  // Bind actions
   c.querySelectorAll("[data-action]").forEach(btn => {
     btn.addEventListener("click", handleAction);
   });
@@ -187,7 +186,6 @@ async function moveLesson(courseId, idx, delta) {
   }
 }
 
-/* ---------- MODALS ---------- */
 function setupModals() {
   document.querySelectorAll("[data-close]").forEach(el => {
     el.addEventListener("click", () => {
@@ -264,7 +262,6 @@ async function saveLesson() {
   const lessons = (course.lessons || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
 
   if (editingLesson.lessonIndex !== null) {
-    // Sửa
     const existing = lessons[editingLesson.lessonIndex];
     lessons[editingLesson.lessonIndex] = {
       ...existing,
@@ -274,7 +271,6 @@ async function saveLesson() {
       description
     };
   } else {
-    // Thêm mới
     const newId = "lesson-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7);
     lessons.push({
       id: newId,
@@ -298,7 +294,6 @@ async function saveLesson() {
   }
 }
 
-/* ---------- USERS ---------- */
 async function loadUsers() {
   const c = document.getElementById("users-container");
   try {
@@ -310,6 +305,12 @@ async function loadUsers() {
     const progressMap = {};
     allProgress.forEach(p => { progressMap[p.id] = p; });
 
+    if (!courses.length) {
+      try { courses = await fetchCourses(); } catch (e) {}
+    }
+
+    const lockedItems = computeLockedItems(users, progressMap);
+
     c.innerHTML = `
       <div style="overflow-x:auto">
         <table class="users-table">
@@ -319,6 +320,7 @@ async function loadUsers() {
               <th>Email</th>
               <th>Vai trò</th>
               <th>Bài đã học</th>
+              <th>Bài hết hạn</th>
               <th>Đăng nhập gần nhất</th>
             </tr>
           </thead>
@@ -326,6 +328,7 @@ async function loadUsers() {
             ${users.map(u => {
               const prog = progressMap[u.id];
               const completedCount = (prog && prog.completed) ? prog.completed.length : 0;
+              const lockedCount = (lockedItems.byUser[u.id] || []).length;
               const lastLogin = u.lastLogin ? new Date(u.lastLogin.seconds * 1000).toLocaleString("vi-VN") : "—";
               return `
                 <tr>
@@ -333,6 +336,7 @@ async function loadUsers() {
                   <td>${escapeHtml(u.email || "—")}</td>
                   <td><span class="role-badge ${u.role === "admin" ? "admin" : "user"}">${u.role || "user"}</span></td>
                   <td>${completedCount} bài</td>
+                  <td>${lockedCount > 0 ? `<span style="color:var(--danger);font-weight:600">${lockedCount} hết hạn</span>` : "—"}</td>
                   <td>${lastLogin}</td>
                 </tr>
               `;
@@ -340,8 +344,103 @@ async function loadUsers() {
           </tbody>
         </table>
       </div>
+
+      <div class="admin-card" style="margin-top:24px">
+        <div class="admin-card-header">
+          <h2 class="admin-card-title">⌛ Bài đang chờ mở khóa</h2>
+          <button class="btn btn-secondary btn-sm" id="btn-refresh-locked">Làm mới</button>
+        </div>
+        <div id="locked-list">
+          ${lockedItems.flat.length === 0
+            ? `<p style="color:var(--text-mute);font-style:italic">Không có user nào đang bị khóa bài.</p>`
+            : lockedItems.flat.map(item => `
+                <div class="admin-locked-row" data-uid="${escapeHtml(item.userId)}" data-lesson="${escapeHtml(item.lessonId)}">
+                  <div class="info">
+                    <div class="name">${escapeHtml(item.userName)} <span style="color:var(--text-mute);font-weight:400">(${escapeHtml(item.userEmail)})</span></div>
+                    <div class="meta">Khóa: <strong>${escapeHtml(item.courseTitle)}</strong> — Bài: <strong>${escapeHtml(item.lessonTitle)}</strong> · Hết hạn từ ${item.expiredAgo}</div>
+                  </div>
+                  <button class="btn btn-primary btn-sm" data-action="unlock-lesson"
+                    data-uid="${escapeHtml(item.userId)}"
+                    data-lesson="${escapeHtml(item.lessonId)}">
+                    🔓 Mở lại 24h
+                  </button>
+                </div>
+              `).join("")}
+        </div>
+      </div>
     `;
+
+    c.querySelectorAll('[data-action="unlock-lesson"]').forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const uid = btn.dataset.uid;
+        const lessonId = btn.dataset.lesson;
+        btn.disabled = true;
+        btn.textContent = "Đang mở...";
+        try {
+          await adminResetLessonTimer(uid, lessonId);
+          flashMessage("✓ Đã mở lại bài. User có thêm 24h.", "success");
+          await loadUsers();
+        } catch (err) {
+          flashMessage("Lỗi: " + err.message, "error");
+          btn.disabled = false;
+          btn.textContent = "🔓 Mở lại 24h";
+        }
+      });
+    });
+
+    const refreshBtn = document.getElementById("btn-refresh-locked");
+    if (refreshBtn) refreshBtn.addEventListener("click", loadUsers);
+
   } catch (err) {
     c.innerHTML = `<p style="color:#ef4444">Lỗi: ${escapeHtml(err.message)}</p>`;
   }
+}
+
+function computeLockedItems(users, progressMap) {
+  const byUser = {};
+  const flat = [];
+
+  users.forEach(u => {
+    if (u.role === "admin") return;
+    const prog = progressMap[u.id];
+    if (!prog) return;
+    const unlockedAt = prog.unlockedAt || {};
+
+    courses.forEach(course => {
+      const lessons = (course.lessons || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+      lessons.forEach((lesson, idx) => {
+        const status = getLessonStatus(lessons, idx, prog);
+        if (status !== 'locked-expired') return;
+
+        const unlockTime = unlockedAt[lesson.id];
+        const expiredAgo = unlockTime ? formatExpiredAgo(unlockTime) : "không rõ";
+
+        const item = {
+          userId: u.id,
+          userName: u.displayName || u.email || "—",
+          userEmail: u.email || "",
+          courseTitle: course.title || "—",
+          lessonTitle: lesson.title || "—",
+          lessonId: lesson.id,
+          expiredAgo
+        };
+        if (!byUser[u.id]) byUser[u.id] = [];
+        byUser[u.id].push(item);
+        flat.push(item);
+      });
+    });
+  });
+
+  return { byUser, flat };
+}
+
+function formatExpiredAgo(unlockTime) {
+  const EXPIRY = 24 * 60 * 60 * 1000;
+  const expiredAt = unlockTime + EXPIRY;
+  const ago = Date.now() - expiredAt;
+  if (ago < 0) return "vừa nãy";
+  const days = Math.floor(ago / (24 * 60 * 60 * 1000));
+  const hours = Math.floor((ago % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  if (days > 0) return `${days} ngày${hours > 0 ? ` ${hours}h` : ""} trước`;
+  return `${hours}h trước`;
 }
