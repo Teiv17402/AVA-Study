@@ -1,5 +1,5 @@
 /* ============================================
-   THEME ÃÂÃÂEN - VÃÂÃÂNG  v2
+   THEME ÃÂÃÂÃÂÃÂEN - VÃÂÃÂÃÂÃÂNG  v2
    ============================================ */
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@300;400;500;600;700&display=swap');
 
@@ -24,6 +24,8 @@
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
   --shadow-yellow: 0 4px 16px rgba(212, 175, 110, 0.2);
   --transition: 0.2s ease;
+  --font-serif: "Playfair Display", "Times New Roman", serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1029,7 +1031,7 @@ textarea { resize: vertical; min-height: 80px; }
 }
 
 /* ============================================
-   LANDING PAGE ÃÂ¢ÃÂÃÂ public, before login
+   LANDING PAGE ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ public, before login
    ============================================ */
 .landing-body {
   min-height: 100vh;
