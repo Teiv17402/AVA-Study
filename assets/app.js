@@ -16,7 +16,7 @@ export function renderHeader(user) {
   const admin = isAdmin(user);
   const avatar = user.photoURL
     ? `<img src="${escapeHtml(user.photoURL)}" referrerpolicy="no-referrer" alt="" />`
-    : `<div style="width:28px;height:28px;border-radius:50%;background:#ffd60a;color:#000;display:flex;align-items:center;justify-content:center;font-weight:700;">${(user.displayName || user.email || "U")[0].toUpperCase()}</div>`;
+    : `<div style="width:28px;height:28px;border-radius:50%;background:#d4af6e;color:#000;display:flex;align-items:center;justify-content:center;font-weight:700;">${(user.displayName || user.email || "U")[0].toUpperCase()}</div>`;
 
   el.innerHTML = `
     ${admin ? `<a class="btn-header" href="admin.html" title="Trang quản trị">⚙ Quản trị</a>` : ""}
@@ -62,7 +62,7 @@ export function flashMessage(text, type = "info") {
     document.body.appendChild(el);
   }
   const colors = {
-    info: "background:#ffd60a;color:#000;",
+    info: "background:#d4af6e;color:#000;",
     success: "background:#4ade80;color:#000;",
     error: "background:#ef4444;color:#fff;"
   };
@@ -72,11 +72,57 @@ export function flashMessage(text, type = "info") {
   el._t = setTimeout(() => { el.style.display = "none"; }, 2800);
 }
 
-/* ---------- Lesson unlock logic ---------- */
-export function isLessonUnlocked(lessons, lessonIndex, completedIds) {
-  if (lessonIndex === 0) return true;
+/* ---------- Lesson unlock + 24h timer logic ---------- */
+export const LESSON_EXPIRY_MS = 24 * 60 * 60 * 1000;
+
+export function getLessonStatus(lessons, lessonIndex, progress) {
+  const lesson = lessons[lessonIndex];
+  const completed = progress.completed || [];
+  const unlockedAt = progress.unlockedAt || {};
+
+  if (completed.includes(lesson.id)) return 'completed';
+
+  if (lessonIndex === 0) {
+    return checkExpired(unlockedAt[lesson.id]);
+  }
+
   const prev = lessons[lessonIndex - 1];
-  return completedIds.includes(prev.id);
+  if (!completed.includes(prev.id)) return 'locked-prerequisite';
+
+  return checkExpired(unlockedAt[lesson.id]);
+}
+
+function checkExpired(unlockTime) {
+  if (!unlockTime) return 'available';
+  const elapsed = Date.now() - unlockTime;
+  return elapsed > LESSON_EXPIRY_MS ? 'locked-expired' : 'available';
+}
+
+export function getRemainingMs(lessonId, progress) {
+  const unlockTime = (progress.unlockedAt || {})[lessonId];
+  if (!unlockTime) return null;
+  const remaining = LESSON_EXPIRY_MS - (Date.now() - unlockTime);
+  return remaining > 0 ? remaining : 0;
+}
+
+export function formatRemaining(ms) {
+  if (ms == null) return '';
+  const totalMin = Math.max(0, Math.floor(ms / 60000));
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+export function isLessonUnlocked(lessons, lessonIndex, completedIds, progress) {
+  if (Array.isArray(completedIds) && !progress) {
+    if (lessonIndex === 0) return true;
+    const prev = lessons[lessonIndex - 1];
+    return completedIds.includes(prev.id);
+  }
+  const prog = progress || { completed: completedIds || [], unlockedAt: {} };
+  const status = getLessonStatus(lessons, lessonIndex, prog);
+  return status === 'completed' || status === 'available';
 }
 
 export function getCourseProgress(lessons, completedIds) {
@@ -85,7 +131,6 @@ export function getCourseProgress(lessons, completedIds) {
   return { total, done, percent: total ? Math.round((done / total) * 100) : 0 };
 }
 
-/* ---------- Auto-attach auth listener on all pages ---------- */
 onAuthStateChanged(auth, (user) => {
   if (user) renderHeader(user);
 });
