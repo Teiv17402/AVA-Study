@@ -88,15 +88,19 @@ export const LESSON_EXPIRY_MS = 24 * 60 * 60 * 1000;
  *   'locked-expired'      — quá 24h chưa làm
  *   'locked-vip'          — VIP, chưa thanh toán
  */
-export function getLessonStatus(lessons, lessonIndex, progress) {
+export function getLessonStatus(lessons, lessonIndex, progress, course) {
   const lesson = lessons[lessonIndex];
   const completed = progress.completed || [];
   const unlockedAt = progress.unlockedAt || {};
   const paidLessons = progress.paidLessons || [];
+  const paidCourses = progress.paidCourses || [];
 
   if (completed.includes(lesson.id)) return 'completed';
 
-  // VIP check: bài VIP + user chưa pay → locked-vip
+  if (course && course.isVip && !paidCourses.includes(course.id)) {
+    return 'locked-vip-course';
+  }
+
   if (lesson.isVip && !paidLessons.includes(lesson.id)) {
     return 'locked-vip';
   }
@@ -133,14 +137,14 @@ export function formatRemaining(ms) {
   return `${m}m`;
 }
 
-export function isLessonUnlocked(lessons, lessonIndex, completedIds, progress) {
+export function isLessonUnlocked(lessons, lessonIndex, completedIds, progress, course) {
   if (Array.isArray(completedIds) && !progress) {
     if (lessonIndex === 0) return true;
     const prev = lessons[lessonIndex - 1];
     return completedIds.includes(prev.id);
   }
-  const prog = progress || { completed: completedIds || [], unlockedAt: {}, paidLessons: [] };
-  const status = getLessonStatus(lessons, lessonIndex, prog);
+  const prog = progress || { completed: completedIds || [], unlockedAt: {}, paidLessons: [], paidCourses: [] };
+  const status = getLessonStatus(lessons, lessonIndex, prog, course);
   return status === 'completed' || status === 'available';
 }
 
