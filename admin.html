@@ -34,7 +34,6 @@
       <button class="admin-tab" data-tab="users">👥 Người dùng</button>
     </div>
 
-    <!-- TAB COURSES -->
     <section class="admin-section active" id="section-courses">
       <div class="admin-card">
         <div class="admin-card-header">
@@ -42,29 +41,21 @@
           <button class="btn btn-primary btn-sm" id="btn-new-course">+ Thêm khóa học</button>
         </div>
         <div id="courses-container">
-          <div class="loading-screen">
-            <div class="spinner"></div>
-            <p>Đang tải...</p>
-          </div>
+          <div class="loading-screen"><div class="spinner"></div><p>Đang tải...</p></div>
         </div>
       </div>
     </section>
 
-    <!-- TAB USERS -->
     <section class="admin-section" id="section-users">
       <div class="admin-card">
         <div class="admin-card-header">
           <h2 class="admin-card-title">Người dùng đã đăng nhập</h2>
         </div>
         <div id="users-container">
-          <div class="loading-screen">
-            <div class="spinner"></div>
-            <p>Đang tải...</p>
-          </div>
+          <div class="loading-screen"><div class="spinner"></div><p>Đang tải...</p></div>
         </div>
       </div>
     </section>
-
   </main>
 
   <!-- MODAL: COURSE -->
@@ -124,23 +115,34 @@
             <label>Google Drive File ID</label>
             <input type="text" id="lesson-drive" placeholder="VD: 1abc...XYZ" />
             <div class="form-help">
-              Lấy từ link share của video Google Drive. Trong link
-              <code>drive.google.com/file/d/<strong>FILE_ID</strong>/view</code>,
-              copy phần giữa <code>/d/</code> và <code>/view</code>.
+              Lấy từ link share Google Drive video. Phần giữa
+              <code>/d/</code> và <code>/view</code>.
             </div>
           </div>
           <div class="form-group">
             <label>Thời lượng (giây)</label>
-            <input type="number" id="lesson-duration" placeholder="VD: 600 (= 10 phút)" min="0" />
-            <div class="form-help">
-              10 phút = 600. 5 phút 30 giây = 330. Người học phải xem 80% thời lượng này.
-            </div>
+            <input type="number" id="lesson-duration" placeholder="VD: 600" min="0" />
+            <div class="form-help">10 phút = 600. User phải xem 80% thời lượng này.</div>
           </div>
         </div>
         <div class="form-row single">
           <div class="form-group">
             <label>Mô tả bài học</label>
             <textarea id="lesson-desc" placeholder="Nội dung bài học..."></textarea>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="lesson-is-vip" style="width:auto" />
+              <span>👑 Đánh dấu là bài VIP (yêu cầu thanh toán)</span>
+            </label>
+            <div class="form-help">User phải chuyển khoản + admin duyệt mới xem được.</div>
+          </div>
+          <div class="form-group">
+            <label>Giá VIP (VNĐ)</label>
+            <input type="number" id="lesson-price" placeholder="VD: 99000" min="0" />
+            <div class="form-help">Để trống = dùng giá mặc định 99.000đ.</div>
           </div>
         </div>
       </div>
