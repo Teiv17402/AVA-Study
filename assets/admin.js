@@ -12,6 +12,7 @@ import {
   adminResetLessonTimer,
   fetchPendingPayments,
   approvePayment,
+  approveCoursePayment,
   rejectPayment,
   BANK_CONFIG
 } from "./firebase.js";
@@ -81,7 +82,7 @@ function renderCourses() {
       <div class="admin-card" data-course="${escapeHtml(course.id)}" style="border-color: var(--border)">
         <div class="admin-card-header">
           <div>
-            <div class="admin-card-title">${escapeHtml(course.title)}</div>
+            <div class="admin-card-title">${escapeHtml(course.title)} ${course.isVip ? `<span class="lesson-vip-tag">👑 KHÓA VIP ${formatVnd(course.price || BANK_CONFIG.defaultPrice)}</span>` : ""}</div>
             <div style="font-size:13px;color:var(--text-mute);margin-top:4px">
               ${escapeHtml(course.level || "")} · ${lessons.length} bài · Thứ tự: ${course.order || 0}
             </div>
@@ -213,17 +214,26 @@ function openCourseModal(course = null) {
   document.getElementById("course-level").value = course ? (course.level || "Cơ bản") : "Cơ bản";
   document.getElementById("course-order").value = course ? (course.order || 0) : (courses.length + 1);
   document.getElementById("course-desc").value = course ? (course.description || "") : "";
+  const vipCheckbox = document.getElementById("course-is-vip");
+  const priceInput = document.getElementById("course-price");
+  if (vipCheckbox) vipCheckbox.checked = !!(course && course.isVip);
+  if (priceInput) priceInput.value = (course && course.price) ? course.price : "";
   document.getElementById("modal-course").classList.add("active");
 }
 
 async function saveCourse() {
   const title = document.getElementById("course-title").value.trim();
   if (!title) { flashMessage("Tên khóa học không được trống", "error"); return; }
+  const isVip = !!document.getElementById("course-is-vip")?.checked;
+  const priceVal = parseInt(document.getElementById("course-price")?.value);
+  const price = (isVip && priceVal > 0) ? priceVal : (isVip ? BANK_CONFIG.defaultPrice : 0);
   const data = {
     title,
     level: document.getElementById("course-level").value.trim() || "Cơ bản",
     order: parseInt(document.getElementById("course-order").value) || 0,
-    description: document.getElementById("course-desc").value.trim()
+    description: document.getElementById("course-desc").value.trim(),
+    isVip,
+    price
   };
 
   try {
@@ -368,16 +378,22 @@ async function loadUsers() {
             ? `<p style="color:var(--text-mute);font-style:italic">Không có yêu cầu thanh toán nào.</p>`
             : payments.map(p => {
                 const created = p.createdAt ? new Date(p.createdAt.seconds * 1000).toLocaleString("vi-VN") : "—";
+                const isCourse = p.type === "course";
+                const typeBadge = isCourse
+                  ? `<span class="payment-type-badge course">👑 KHÓA</span>`
+                  : `<span class="payment-type-badge lesson">📖 BÀI</span>`;
+                const target = isCourse
+                  ? `Khóa: <strong>${escapeHtml(p.courseTitle || "—")}</strong> <em style="color:var(--text-mute)">(toàn bộ bài)</em>`
+                  : `Khóa: <strong>${escapeHtml(p.courseTitle || "—")}</strong> · Bài: <strong>${escapeHtml(p.lessonTitle || "—")}</strong>`;
                 return `
                   <div class="payment-row-admin">
                     <div class="info">
                       <div class="name">
+                        ${typeBadge}
                         ${escapeHtml(p.userEmail || "—")}
                         <span class="payment-amount">${formatVnd(p.amount)}</span>
                       </div>
-                      <div class="meta">
-                        Khóa: <strong>${escapeHtml(p.courseTitle || "—")}</strong> · Bài: <strong>${escapeHtml(p.lessonTitle || "—")}</strong>
-                      </div>
+                      <div class="meta">${target}</div>
                       <div class="meta payment-content">
                         Nội dung CK: <code>${escapeHtml(p.transferContent)}</code> · ${created}
                       </div>
@@ -386,7 +402,9 @@ async function loadUsers() {
                       <button class="btn btn-primary btn-sm" data-payment-action="approve"
                         data-pid="${escapeHtml(p.id)}"
                         data-uid="${escapeHtml(p.userId)}"
-                        data-lesson="${escapeHtml(p.lessonId)}">✓ Duyệt</button>
+                        data-type="${isCourse ? 'course' : 'lesson'}"
+                        data-course="${escapeHtml(p.courseId || '')}"
+                        data-lesson="${escapeHtml(p.lessonId || '')}">✓ Duyệt</button>
                       <button class="btn btn-danger btn-sm" data-payment-action="reject"
                         data-pid="${escapeHtml(p.id)}">✗ Từ chối</button>
                     </div>
@@ -425,13 +443,20 @@ async function loadUsers() {
         const action = btn.dataset.paymentAction;
         const pid = btn.dataset.pid;
         const uid = btn.dataset.uid;
+        const type = btn.dataset.type;
+        const courseId = btn.dataset.course;
         const lessonId = btn.dataset.lesson;
         btn.disabled = true;
         btn.textContent = "Đang xử lý...";
         try {
           if (action === "approve") {
-            await approvePayment(pid, uid, lessonId, currentUser.uid);
-            flashMessage("✓ Đã duyệt! User có thể xem bài VIP.", "success");
+            if (type === "course") {
+              await approveCoursePayment(pid, uid, courseId, currentUser.uid);
+              flashMessage("✓ Đã duyệt mua khóa! User có thể xem toàn bộ bài.", "success");
+            } else {
+              await approvePayment(pid, uid, lessonId, currentUser.uid);
+              flashMessage("✓ Đã duyệt! User có thể xem bài VIP.", "success");
+            }
           } else {
             await rejectPayment(pid, currentUser.uid);
             flashMessage("Đã từ chối thanh toán.", "info");
