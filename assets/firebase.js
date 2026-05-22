@@ -404,6 +404,14 @@ export async function fetchPendingPayments() {
   return items;
 }
 
+/** Admin lấy TẤT CẢ payments (mọi status) — cho tab Lịch sử */
+export async function fetchAllPayments() {
+  const snap = await getDocs(collection(db, "payments"));
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  return items;
+}
+
 /** Admin duyệt payment → thêm lesson vào paidLessons của user */
 export async function approvePayment(paymentId, userId, lessonId, adminUid) {
   // Update payment status
