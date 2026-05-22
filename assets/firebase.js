@@ -20,6 +20,7 @@ import {
   updateDoc,
   deleteDoc,
   query,
+  where,
   orderBy,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
@@ -36,6 +37,34 @@ const firebaseConfig = {
 export const ADMIN_EMAILS = [
   "lehoangviet.17042002@gmail.com"
 ];
+
+// ============================================
+// BANK CONFIG — DEMO DATA (admin sửa lại sau)
+// ============================================
+export const BANK_CONFIG = {
+  bankCode: "MB",            // Mã ngân hàng VietQR (xem https://api.vietqr.io/v2/banks)
+  bankName: "MB Bank",
+  accountNo: "0123456789",
+  accountName: "NGUYEN VAN DEMO",
+  defaultPrice: 99000        // Giá mặc định 1 bài VIP (VNĐ)
+};
+
+/** Tạo URL ảnh VietQR */
+export function buildVietQrUrl(amount, content) {
+  const params = new URLSearchParams({
+    amount: amount,
+    addInfo: content,
+    accountName: BANK_CONFIG.accountName
+  });
+  return `https://img.vietqr.io/image/${BANK_CONFIG.bankCode}-${BANK_CONFIG.accountNo}-compact2.png?${params}`;
+}
+
+/** Tạo nội dung chuyển khoản unique */
+export function buildTransferContent(userId, lessonId) {
+  const u = userId.slice(0, 6).toUpperCase();
+  const l = lessonId.slice(-5).toUpperCase();
+  return `AVA${u}${l}`;
+}
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -55,6 +84,7 @@ export {
   updateDoc,
   deleteDoc,
   query,
+  where,
   orderBy,
   serverTimestamp
 };
@@ -156,11 +186,12 @@ export async function deleteCourse(courseId) {
 
 export async function fetchUserProgress(userId) {
   const snap = await getDoc(doc(db, "userProgress", userId));
-  if (!snap.exists()) return { completed: [], unlockedAt: {} };
+  if (!snap.exists()) return { completed: [], unlockedAt: {}, paidLessons: [] };
   const data = snap.data();
   return {
     completed: data.completed || [],
     unlockedAt: data.unlockedAt || {},
+    paidLessons: data.paidLessons || [],
     lastUpdate: data.lastUpdate
   };
 }
@@ -225,6 +256,7 @@ export async function resetUserProgress(userId) {
   await setDoc(doc(db, "userProgress", userId), {
     completed: [],
     unlockedAt: {},
+    paidLessons: [],
     lastUpdate: serverTimestamp()
   });
 }
@@ -237,4 +269,105 @@ export async function fetchAllUsers() {
 export async function fetchAllProgress() {
   const snap = await getDocs(collection(db, "userProgress"));
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// ============================================
+// PAYMENT HELPERS
+// ============================================
+
+/** User tạo yêu cầu thanh toán (status: pending) */
+export async function createPayment(userId, userEmail, lessonId, courseId, courseTitle, lessonTitle, amount) {
+  const transferContent = buildTransferContent(userId, lessonId);
+
+  // Kiểm tra đã có pending payment cho bài này chưa
+  const existing = await getDocs(query(
+    collection(db, "payments"),
+    where("userId", "==", userId),
+    where("lessonId", "==", lessonId),
+    where("status", "==", "pending")
+  ));
+  if (!existing.empty) {
+    // Đã có pending — trả lại payment đó
+    const d = existing.docs[0];
+    return { id: d.id, ...d.data() };
+  }
+
+  const ref = await addDoc(collection(db, "payments"), {
+    userId,
+    userEmail: userEmail || "",
+    lessonId,
+    courseId,
+    courseTitle: courseTitle || "",
+    lessonTitle: lessonTitle || "",
+    amount,
+    transferContent,
+    status: "pending",
+    createdAt: serverTimestamp()
+  });
+  return {
+    id: ref.id,
+    userId,
+    lessonId,
+    courseId,
+    amount,
+    transferContent,
+    status: "pending"
+  };
+}
+
+/** User check trạng thái thanh toán cho 1 bài */
+export async function fetchMyPaymentForLesson(userId, lessonId) {
+  const snap = await getDocs(query(
+    collection(db, "payments"),
+    where("userId", "==", userId),
+    where("lessonId", "==", lessonId)
+  ));
+  if (snap.empty) return null;
+  // Lấy cái mới nhất
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  return items[0];
+}
+
+/** Admin lấy list tất cả payment pending */
+export async function fetchPendingPayments() {
+  const snap = await getDocs(query(
+    collection(db, "payments"),
+    where("status", "==", "pending")
+  ));
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  return items;
+}
+
+/** Admin duyệt payment → thêm lesson vào paidLessons của user */
+export async function approvePayment(paymentId, userId, lessonId, adminUid) {
+  // Update payment status
+  await updateDoc(doc(db, "payments", paymentId), {
+    status: "approved",
+    approvedAt: serverTimestamp(),
+    approvedBy: adminUid
+  });
+
+  // Add lessonId vào paidLessons của user
+  const progRef = doc(db, "userProgress", userId);
+  const snap = await getDoc(progRef);
+  const data = snap.exists() ? snap.data() : {};
+  const paidLessons = data.paidLessons || [];
+  if (!paidLessons.includes(lessonId)) {
+    paidLessons.push(lessonId);
+  }
+  await setDoc(progRef, {
+    paidLessons,
+    lastUpdate: serverTimestamp()
+  }, { merge: true });
+}
+
+/** Admin từ chối payment */
+export async function rejectPayment(paymentId, adminUid) {
+  await updateDoc(doc(db, "payments", paymentId), {
+    status: "rejected",
+    approvedAt: serverTimestamp(),
+    approvedBy: adminUid
+  });
 }
