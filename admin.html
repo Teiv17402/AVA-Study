@@ -32,6 +32,7 @@
     <div class="admin-tabs">
       <button class="admin-tab active" data-tab="courses">📚 Khóa học</button>
       <button class="admin-tab" data-tab="users">👥 Người dùng</button>
+      <button class="admin-tab" data-tab="payments">💰 Lịch sử thanh toán</button>
     </div>
 
     <section class="admin-section active" id="section-courses">
@@ -52,6 +53,18 @@
           <h2 class="admin-card-title">Người dùng đã đăng nhập</h2>
         </div>
         <div id="users-container">
+          <div class="loading-screen"><div class="spinner"></div><p>Đang tải...</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-section" id="section-payments">
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <h2 class="admin-card-title">💰 Lịch sử thanh toán</h2>
+          <button class="btn btn-secondary btn-sm" id="btn-refresh-history">Làm mới</button>
+        </div>
+        <div id="payments-history-container">
           <div class="loading-screen"><div class="spinner"></div><p>Đang tải...</p></div>
         </div>
       </div>
@@ -163,6 +176,22 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" data-close>Hủy</button>
         <button class="btn btn-primary" id="btn-save-lesson">Lưu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: USER DETAIL -->
+  <div class="modal-overlay" id="modal-user-detail">
+    <div class="modal modal-large">
+      <div class="modal-header">
+        <h2 id="modal-user-detail-title">Chi tiết người dùng</h2>
+        <button class="modal-close" data-close>×</button>
+      </div>
+      <div class="modal-body" id="modal-user-detail-body">
+        <div class="loading-screen"><div class="spinner"></div><p>Đang tải...</p></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close>Đóng</button>
       </div>
     </div>
   </div>
