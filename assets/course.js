@@ -10,6 +10,8 @@ import {
   resetUserProgress,
   createPayment,
   fetchMyPaymentForLesson,
+  createCoursePayment,
+  fetchMyPaymentForCourse,
   buildVietQrUrl,
   BANK_CONFIG,
   isAdmin
@@ -30,7 +32,7 @@ import {
 let currentUser = null;
 let currentCourse = null;
 let currentLessons = [];
-let userProgress = { completed: [], unlockedAt: {}, paidLessons: [] };
+let userProgress = { completed: [], unlockedAt: {}, paidLessons: [], paidCourses: [] };
 let currentLessonIndex = 0;
 let videoTimerId = null;
 let videoElapsed = 0;
@@ -85,17 +87,19 @@ export async function initCoursePage() {
     }
 
     if (!isAdmin(currentUser)) {
-      // Find first non-VIP lesson to ensure unlock
-      const firstNonVip = currentLessons.find(l => !l.isVip);
-      if (firstNonVip) {
-        const updated = await ensureFirstUnlock(currentUser.uid, firstNonVip.id);
-        if (updated) userProgress = { ...userProgress, ...updated };
+      const courseLocked = course.isVip && !(userProgress.paidCourses || []).includes(course.id);
+      if (!courseLocked) {
+        const firstNonVip = currentLessons.find(l => !l.isVip);
+        if (firstNonVip) {
+          const updated = await ensureFirstUnlock(currentUser.uid, firstNonVip.id);
+          if (updated) userProgress = { ...userProgress, ...updated };
+        }
       }
     }
 
-    let startIdx = currentLessons.length - 1;
+    let startIdx = 0;
     for (let i = 0; i < currentLessons.length; i++) {
-      const status = getLessonStatus(currentLessons, i, userProgress);
+      const status = getLessonStatus(currentLessons, i, userProgress, currentCourse);
       if (status === 'available') { startIdx = i; break; }
     }
     const hashId = location.hash.replace("#", "");
@@ -139,7 +143,7 @@ function renderSidebar() {
 
   const list = document.getElementById("lesson-list");
   list.innerHTML = currentLessons.map((lesson, idx) => {
-    const status = getLessonStatus(currentLessons, idx, userProgress);
+    const status = getLessonStatus(currentLessons, idx, userProgress, currentCourse);
     const active = idx === currentLessonIndex;
 
     let cls = "lesson-item";
@@ -157,6 +161,9 @@ function renderSidebar() {
       extra = `<span class="lesson-expired-tag">Hết hạn</span>`;
     }
     else if (status === 'locked-vip') {
+      cls += " vip-locked"; icon = "👑";
+    }
+    else if (status === 'locked-vip-course') {
       cls += " vip-locked"; icon = "👑";
     }
     else if (status === 'available') {
@@ -184,7 +191,7 @@ function renderSidebar() {
   list.querySelectorAll(".lesson-item").forEach(el => {
     el.addEventListener("click", () => {
       const idx = parseInt(el.dataset.idx);
-      const status = getLessonStatus(currentLessons, idx, userProgress);
+      const status = getLessonStatus(currentLessons, idx, userProgress, currentCourse);
       if (status === 'locked-prerequisite') {
         flashMessage("Bài này đang khóa. Hoàn thành bài trước để mở!", "error");
         return;
@@ -204,10 +211,18 @@ function renderSidebar() {
 function loadLesson(index) {
   if (index < 0 || index >= currentLessons.length) return;
   const lesson = currentLessons[index];
-  const status = getLessonStatus(currentLessons, index, userProgress);
+  const status = getLessonStatus(currentLessons, index, userProgress, currentCourse);
 
   if (!isAdmin(currentUser)) {
     if (status === 'locked-prerequisite') return;
+
+    if (status === 'locked-vip-course') {
+      currentLessonIndex = index;
+      history.replaceState(null, "", `#${lesson.id}`);
+      renderCourseVipPaymentNotice(currentCourse, lesson);
+      renderSidebar();
+      return;
+    }
 
     if (status === 'locked-vip') {
       currentLessonIndex = index;
@@ -414,6 +429,144 @@ async function showPaymentModal(lesson, price) {
     flashMessage("✓ Đã gửi yêu cầu! Đang chờ admin duyệt...", "success");
     // Reload lesson to show "pending" state
     setTimeout(() => renderVipPaymentNotice(lesson), 800);
+  });
+}
+
+async function renderCourseVipPaymentNotice(course, lesson) {
+  const price = course.price || BANK_CONFIG.defaultPrice;
+  const existingPayment = await fetchMyPaymentForCourse(currentUser.uid, course.id);
+
+  const videoWrap = document.getElementById("video-wrap");
+  videoWrap.innerHTML = `
+    <div class="video-placeholder" style="background: linear-gradient(135deg, #1a1a1a, #2a1f0a)">
+      <div class="icon" style="color:var(--accent);font-size:80px">👑</div>
+      <div><strong style="font-size:18px">Khóa học VIP</strong></div>
+      <div style="font-size:13px;margin-top:8px">Thanh toán 1 lần để mở toàn bộ ${(course.lessons || []).length} bài học</div>
+    </div>`;
+
+  document.getElementById("lesson-title-big").textContent = lesson.title;
+  document.getElementById("lesson-badge").textContent = "👑 Khóa VIP";
+  document.getElementById("lesson-badge").classList.remove("done");
+
+  const descEl = document.getElementById("lesson-description");
+
+  if (existingPayment && existingPayment.status === 'pending') {
+    descEl.innerHTML = renderCoursePendingPayment(existingPayment, course, price);
+  } else if (existingPayment && existingPayment.status === 'rejected') {
+    descEl.innerHTML = renderCoursePaymentForm(course, price, true);
+    bindCoursePaymentButton(course, price);
+  } else {
+    descEl.innerHTML = renderCoursePaymentForm(course, price, false);
+    bindCoursePaymentButton(course, price);
+  }
+
+  document.getElementById("timer-info").innerHTML = `<span class="timer-icon">👑</span><span>Khóa VIP — thanh toán để mở toàn bộ khóa</span>`;
+  document.getElementById("btn-done").disabled = true;
+  document.getElementById("btn-done").textContent = "Khóa VIP";
+  document.getElementById("btn-prev").disabled = (currentLessonIndex === 0);
+  document.getElementById("btn-next").disabled = true;
+  if (videoTimerId) clearInterval(videoTimerId);
+}
+
+function renderCoursePaymentForm(course, price, wasRejected) {
+  const total = (course.lessons || []).length;
+  return `
+    <div class="vip-notice course-vip">
+      ${wasRejected ? `<div class="vip-warn">⚠️ Lần thanh toán trước bị từ chối. Vui lòng kiểm tra lại nội dung chuyển khoản.</div>` : ""}
+      <h3>👑 Khóa học VIP — mở toàn bộ ${total} bài</h3>
+      <div class="vip-price">${formatVnd(price)}</div>
+      <p class="vip-instructions">
+        Thanh toán <strong>1 lần</strong> cho cả khóa. Admin duyệt xong, bạn xem được <strong>tất cả ${total} bài</strong> trong khóa này.
+      </p>
+      <button class="btn btn-primary" id="btn-show-qr">📱 Hiện QR thanh toán</button>
+    </div>
+  `;
+}
+
+function renderCoursePendingPayment(payment, course, price) {
+  return `
+    <div class="vip-notice pending course-vip">
+      <h3>⏳ Đang chờ admin duyệt thanh toán khóa</h3>
+      <p class="vip-instructions">
+        Yêu cầu mua khóa <strong>${escapeHtml(course.title)}</strong> đã được gửi. Admin sẽ duyệt trong thời gian ngắn.
+      </p>
+      <div class="vip-info-row"><span>Số tiền:</span> <strong>${formatVnd(payment.amount)}</strong></div>
+      <div class="vip-info-row"><span>Nội dung CK:</span> <strong>${escapeHtml(payment.transferContent)}</strong></div>
+      <button class="btn btn-secondary" id="btn-show-qr">📱 Xem lại QR</button>
+    </div>
+  `;
+}
+
+function bindCoursePaymentButton(course, price) {
+  const btn = document.getElementById("btn-show-qr");
+  if (!btn) return;
+  btn.addEventListener("click", () => showCoursePaymentModal(course, price));
+}
+
+async function showCoursePaymentModal(course, price) {
+  let payment;
+  try {
+    payment = await createCoursePayment(
+      currentUser.uid,
+      currentUser.email,
+      course.id,
+      course.title,
+      price
+    );
+  } catch (err) {
+    flashMessage("Lỗi tạo yêu cầu thanh toán: " + err.message, "error");
+    return;
+  }
+
+  const qrUrl = buildVietQrUrl(price, payment.transferContent);
+  const totalLessons = (course.lessons || []).length;
+
+  let modal = document.getElementById("payment-modal");
+  if (modal) modal.remove();
+  modal = document.createElement("div");
+  modal.id = "payment-modal";
+  modal.className = "modal-overlay active";
+  modal.innerHTML = `
+    <div class="modal payment-modal">
+      <div class="modal-header">
+        <h2>💳 Mua khóa "${escapeHtml(course.title)}"</h2>
+        <button class="modal-close" data-close-payment>×</button>
+      </div>
+      <div class="modal-body">
+        <div class="payment-qr-wrap">
+          <img src="${qrUrl}" alt="QR thanh toán khóa" class="payment-qr" />
+        </div>
+        <div class="payment-info">
+          <div class="payment-row"><span>Ngân hàng:</span> <strong>${escapeHtml(BANK_CONFIG.bankName)}</strong></div>
+          <div class="payment-row"><span>Số tài khoản:</span> <strong>${escapeHtml(BANK_CONFIG.accountNo)}</strong></div>
+          <div class="payment-row"><span>Tên chủ TK:</span> <strong>${escapeHtml(BANK_CONFIG.accountName)}</strong></div>
+          <div class="payment-row highlight"><span>Số tiền:</span> <strong>${formatVnd(price)}</strong></div>
+          <div class="payment-row highlight"><span>Nội dung CK:</span> <strong>${escapeHtml(payment.transferContent)}</strong></div>
+          <div class="payment-row"><span>Bạn nhận được:</span> <strong style="color:var(--accent)">${totalLessons} bài học</strong></div>
+        </div>
+        <p class="payment-note">
+          ⚠️ <strong>Quan trọng:</strong> Nhập <strong>đúng nội dung CK</strong> ở trên (bắt đầu bằng <code>AVAK</code>) để admin biết bạn mua khóa nào.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close-payment>Đóng</button>
+        <button class="btn btn-primary" id="btn-confirm-paid">✅ Tôi đã thanh toán</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.querySelectorAll("[data-close-payment]").forEach(el => {
+    el.addEventListener("click", () => modal.remove());
+  });
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) modal.remove();
+  });
+
+  document.getElementById("btn-confirm-paid").addEventListener("click", () => {
+    modal.remove();
+    flashMessage("✓ Đã gửi yêu cầu mua khóa! Đang chờ admin duyệt...", "success");
+    setTimeout(() => renderCourseVipPaymentNotice(course, currentLessons[currentLessonIndex]), 800);
   });
 }
 
