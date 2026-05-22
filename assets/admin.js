@@ -1,5 +1,5 @@
 // ============================================
-// ADMIN PAGE — quản lý khóa học, bài học, user
+// ADMIN PAGE — quản lý khóa học, bài học, user, payments
 // ============================================
 import {
   requireAdmin,
@@ -9,11 +9,16 @@ import {
   deleteCourse,
   fetchAllUsers,
   fetchAllProgress,
-  adminResetLessonTimer
+  adminResetLessonTimer,
+  fetchPendingPayments,
+  approvePayment,
+  rejectPayment,
+  BANK_CONFIG
 } from "./firebase.js";
 import {
   escapeHtml,
   formatDuration,
+  formatVnd,
   flashMessage,
   renderHeader,
   getLessonStatus
@@ -91,12 +96,12 @@ function renderCourses() {
         ${course.description ? `<p style="color:var(--text-soft);margin-bottom:16px">${escapeHtml(course.description)}</p>` : ""}
 
         ${lessons.length === 0
-          ? `<p style="color:var(--text-mute);font-style:italic">Chưa có bài học nào. Bấm "+ Thêm bài" để bắt đầu.</p>`
+          ? `<p style="color:var(--text-mute);font-style:italic">Chưa có bài học nào.</p>`
           : lessons.map((lesson, idx) => `
               <div class="admin-lesson-row">
                 <div class="num">${idx + 1}</div>
                 <div class="admin-lesson-info">
-                  <div class="name">${escapeHtml(lesson.title)}</div>
+                  <div class="name">${escapeHtml(lesson.title)} ${lesson.isVip ? `<span class="lesson-vip-tag">👑 VIP ${formatVnd(lesson.price || BANK_CONFIG.defaultPrice)}</span>` : ""}</div>
                   <div class="meta">
                     ${formatDuration(lesson.duration || 0)} ·
                     ${lesson.driveFileId && lesson.driveFileId.trim() && lesson.driveFileId !== "REPLACE_WITH_GOOGLE_DRIVE_FILE_ID"
@@ -247,6 +252,10 @@ function openLessonModal(courseId, lessonIdx) {
   document.getElementById("lesson-drive").value = lesson ? (lesson.driveFileId || "") : "";
   document.getElementById("lesson-duration").value = lesson ? (lesson.duration || 0) : 600;
   document.getElementById("lesson-desc").value = lesson ? (lesson.description || "") : "";
+  const vipCheckbox = document.getElementById("lesson-is-vip");
+  const priceInput = document.getElementById("lesson-price");
+  if (vipCheckbox) vipCheckbox.checked = !!(lesson && lesson.isVip);
+  if (priceInput) priceInput.value = (lesson && lesson.price) ? lesson.price : "";
   document.getElementById("modal-lesson").classList.add("active");
 }
 
@@ -257,6 +266,9 @@ async function saveLesson() {
   const driveId = document.getElementById("lesson-drive").value.trim();
   const duration = parseInt(document.getElementById("lesson-duration").value) || 0;
   const description = document.getElementById("lesson-desc").value.trim();
+  const isVip = !!document.getElementById("lesson-is-vip")?.checked;
+  const priceVal = parseInt(document.getElementById("lesson-price")?.value);
+  const price = (isVip && priceVal > 0) ? priceVal : (isVip ? BANK_CONFIG.defaultPrice : 0);
 
   const course = courses.find(c => c.id === editingLesson.courseId);
   const lessons = (course.lessons || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -265,20 +277,13 @@ async function saveLesson() {
     const existing = lessons[editingLesson.lessonIndex];
     lessons[editingLesson.lessonIndex] = {
       ...existing,
-      title,
-      driveFileId: driveId,
-      duration,
-      description
+      title, driveFileId: driveId, duration, description, isVip, price
     };
   } else {
     const newId = "lesson-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7);
     lessons.push({
-      id: newId,
-      title,
-      driveFileId: driveId,
-      duration,
-      description,
-      order: lessons.length
+      id: newId, title, driveFileId: driveId, duration, description,
+      isVip, price, order: lessons.length
     });
   }
 
@@ -297,7 +302,12 @@ async function saveLesson() {
 async function loadUsers() {
   const c = document.getElementById("users-container");
   try {
-    const [users, allProgress] = await Promise.all([fetchAllUsers(), fetchAllProgress()]);
+    const [users, allProgress, payments] = await Promise.all([
+      fetchAllUsers(),
+      fetchAllProgress(),
+      fetchPendingPayments()
+    ]);
+
     if (!users.length) {
       c.innerHTML = `<p style="color:var(--text-mute)">Chưa có user nào đăng nhập.</p>`;
       return;
@@ -320,6 +330,7 @@ async function loadUsers() {
               <th>Email</th>
               <th>Vai trò</th>
               <th>Bài đã học</th>
+              <th>Bài VIP đã mua</th>
               <th>Bài hết hạn</th>
               <th>Đăng nhập gần nhất</th>
             </tr>
@@ -328,6 +339,7 @@ async function loadUsers() {
             ${users.map(u => {
               const prog = progressMap[u.id];
               const completedCount = (prog && prog.completed) ? prog.completed.length : 0;
+              const paidCount = (prog && prog.paidLessons) ? prog.paidLessons.length : 0;
               const lockedCount = (lockedItems.byUser[u.id] || []).length;
               const lastLogin = u.lastLogin ? new Date(u.lastLogin.seconds * 1000).toLocaleString("vi-VN") : "—";
               return `
@@ -336,6 +348,7 @@ async function loadUsers() {
                   <td>${escapeHtml(u.email || "—")}</td>
                   <td><span class="role-badge ${u.role === "admin" ? "admin" : "user"}">${u.role || "user"}</span></td>
                   <td>${completedCount} bài</td>
+                  <td>${paidCount > 0 ? `<span style="color:var(--accent);font-weight:600">${paidCount} bài</span>` : "—"}</td>
                   <td>${lockedCount > 0 ? `<span style="color:var(--danger);font-weight:600">${lockedCount} hết hạn</span>` : "—"}</td>
                   <td>${lastLogin}</td>
                 </tr>
@@ -347,7 +360,45 @@ async function loadUsers() {
 
       <div class="admin-card" style="margin-top:24px">
         <div class="admin-card-header">
-          <h2 class="admin-card-title">⌛ Bài đang chờ mở khóa</h2>
+          <h2 class="admin-card-title">💳 Thanh toán chờ duyệt ${payments.length > 0 ? `<span class="payment-count">${payments.length}</span>` : ""}</h2>
+          <button class="btn btn-secondary btn-sm" id="btn-refresh-payments">Làm mới</button>
+        </div>
+        <div id="payments-list">
+          ${payments.length === 0
+            ? `<p style="color:var(--text-mute);font-style:italic">Không có yêu cầu thanh toán nào.</p>`
+            : payments.map(p => {
+                const created = p.createdAt ? new Date(p.createdAt.seconds * 1000).toLocaleString("vi-VN") : "—";
+                return `
+                  <div class="payment-row-admin">
+                    <div class="info">
+                      <div class="name">
+                        ${escapeHtml(p.userEmail || "—")}
+                        <span class="payment-amount">${formatVnd(p.amount)}</span>
+                      </div>
+                      <div class="meta">
+                        Khóa: <strong>${escapeHtml(p.courseTitle || "—")}</strong> · Bài: <strong>${escapeHtml(p.lessonTitle || "—")}</strong>
+                      </div>
+                      <div class="meta payment-content">
+                        Nội dung CK: <code>${escapeHtml(p.transferContent)}</code> · ${created}
+                      </div>
+                    </div>
+                    <div class="payment-actions">
+                      <button class="btn btn-primary btn-sm" data-payment-action="approve"
+                        data-pid="${escapeHtml(p.id)}"
+                        data-uid="${escapeHtml(p.userId)}"
+                        data-lesson="${escapeHtml(p.lessonId)}">✓ Duyệt</button>
+                      <button class="btn btn-danger btn-sm" data-payment-action="reject"
+                        data-pid="${escapeHtml(p.id)}">✗ Từ chối</button>
+                    </div>
+                  </div>
+                `;
+              }).join("")}
+        </div>
+      </div>
+
+      <div class="admin-card" style="margin-top:24px">
+        <div class="admin-card-header">
+          <h2 class="admin-card-title">⌛ Bài đang chờ mở khóa (quá 24h)</h2>
           <button class="btn btn-secondary btn-sm" id="btn-refresh-locked">Làm mới</button>
         </div>
         <div id="locked-list">
@@ -361,15 +412,40 @@ async function loadUsers() {
                   </div>
                   <button class="btn btn-primary btn-sm" data-action="unlock-lesson"
                     data-uid="${escapeHtml(item.userId)}"
-                    data-lesson="${escapeHtml(item.lessonId)}">
-                    🔓 Mở lại 24h
-                  </button>
+                    data-lesson="${escapeHtml(item.lessonId)}">🔓 Mở lại 24h</button>
                 </div>
               `).join("")}
         </div>
       </div>
     `;
 
+    // Bind payment buttons
+    c.querySelectorAll('[data-payment-action]').forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const action = btn.dataset.paymentAction;
+        const pid = btn.dataset.pid;
+        const uid = btn.dataset.uid;
+        const lessonId = btn.dataset.lesson;
+        btn.disabled = true;
+        btn.textContent = "Đang xử lý...";
+        try {
+          if (action === "approve") {
+            await approvePayment(pid, uid, lessonId, currentUser.uid);
+            flashMessage("✓ Đã duyệt! User có thể xem bài VIP.", "success");
+          } else {
+            await rejectPayment(pid, currentUser.uid);
+            flashMessage("Đã từ chối thanh toán.", "info");
+          }
+          await loadUsers();
+        } catch (err) {
+          flashMessage("Lỗi: " + err.message, "error");
+          btn.disabled = false;
+          btn.textContent = action === "approve" ? "✓ Duyệt" : "✗ Từ chối";
+        }
+      });
+    });
+
+    // Bind unlock buttons
     c.querySelectorAll('[data-action="unlock-lesson"]').forEach(btn => {
       btn.addEventListener("click", async () => {
         const uid = btn.dataset.uid;
@@ -388,8 +464,10 @@ async function loadUsers() {
       });
     });
 
-    const refreshBtn = document.getElementById("btn-refresh-locked");
-    if (refreshBtn) refreshBtn.addEventListener("click", loadUsers);
+    const refreshPayBtn = document.getElementById("btn-refresh-payments");
+    if (refreshPayBtn) refreshPayBtn.addEventListener("click", loadUsers);
+    const refreshLockBtn = document.getElementById("btn-refresh-locked");
+    if (refreshLockBtn) refreshLockBtn.addEventListener("click", loadUsers);
 
   } catch (err) {
     c.innerHTML = `<p style="color:#ef4444">Lỗi: ${escapeHtml(err.message)}</p>`;
