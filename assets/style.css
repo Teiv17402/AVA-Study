@@ -1,5 +1,5 @@
 /* ============================================
-   THEME ĐEN - VÀNG  v2
+   THEME ÄEN - VÃNG  v2
    ============================================ */
 :root {
   --bg: #0a0a0a;
@@ -1014,7 +1014,7 @@ textarea { resize: vertical; min-height: 80px; }
 }
 
 /* ============================================
-   LANDING PAGE — public, before login
+   LANDING PAGE â public, before login
    ============================================ */
 .landing-body {
   min-height: 100vh;
@@ -1180,3 +1180,80 @@ textarea { resize: vertical; min-height: 80px; }
   }
   .landing-btn-title { font-size: 15px; }
 }
+
+/* ============================================
+   24H LESSON LOCK FEATURE
+   ============================================ */
+.lesson-item.expired {
+  opacity: 0.65;
+  cursor: not-allowed;
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.06);
+}
+.lesson-item.expired .lesson-status {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--danger);
+}
+.lesson-item.expired .lesson-name {
+  color: var(--text-mute);
+  text-decoration: line-through;
+}
+
+.lesson-countdown {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 6px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.lesson-countdown.urgent {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.15);
+}
+.lesson-expired-tag {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.15);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 6px;
+  font-weight: 600;
+}
+
+.expired-notice {
+  text-align: center;
+  padding: 48px 24px;
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius);
+}
+.expired-notice .icon { font-size: 56px; color: var(--danger); margin-bottom: 16px; }
+.expired-notice h3 {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  color: var(--danger);
+  margin-bottom: 12px;
+}
+.expired-notice p { color: var(--text-soft); margin-bottom: 8px; }
+
+.admin-locked-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.admin-locked-row .info { flex: 1; min-width: 0; }
+.admin-locked-row .info .name { font-weight: 600; }
+.admin-locked-row .info .meta { font-size: 11px; color: var(--text-mute); }
+.admin-locked-row .btn { white-space: nowrap; }
