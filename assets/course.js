@@ -1,5 +1,5 @@
 // ============================================
-// COURSE PAGE — sidebar + video + 24h lock logic
+// COURSE PAGE — sidebar + video + 24h lock + VIP payment
 // ============================================
 import {
   requireAuth,
@@ -8,11 +8,16 @@ import {
   markLessonCompleted,
   ensureFirstUnlock,
   resetUserProgress,
+  createPayment,
+  fetchMyPaymentForLesson,
+  buildVietQrUrl,
+  BANK_CONFIG,
   isAdmin
 } from "./firebase.js";
 import {
   escapeHtml,
   formatDuration,
+  formatVnd,
   getCourseProgress,
   isLessonUnlocked,
   getLessonStatus,
@@ -25,7 +30,7 @@ import {
 let currentUser = null;
 let currentCourse = null;
 let currentLessons = [];
-let userProgress = { completed: [], unlockedAt: {} };
+let userProgress = { completed: [], unlockedAt: {}, paidLessons: [] };
 let currentLessonIndex = 0;
 let videoTimerId = null;
 let videoElapsed = 0;
@@ -80,9 +85,12 @@ export async function initCoursePage() {
     }
 
     if (!isAdmin(currentUser)) {
-      const firstId = currentLessons[0].id;
-      const updated = await ensureFirstUnlock(currentUser.uid, firstId);
-      if (updated) userProgress = updated;
+      // Find first non-VIP lesson to ensure unlock
+      const firstNonVip = currentLessons.find(l => !l.isVip);
+      if (firstNonVip) {
+        const updated = await ensureFirstUnlock(currentUser.uid, firstNonVip.id);
+        if (updated) userProgress = { ...userProgress, ...updated };
+      }
     }
 
     let startIdx = currentLessons.length - 1;
@@ -93,10 +101,7 @@ export async function initCoursePage() {
     const hashId = location.hash.replace("#", "");
     if (hashId) {
       const idx = currentLessons.findIndex(l => l.id === hashId);
-      if (idx >= 0) {
-        const status = getLessonStatus(currentLessons, idx, userProgress);
-        if (status === 'completed' || status === 'available') startIdx = idx;
-      }
+      if (idx >= 0) startIdx = idx;
     }
 
     setupButtons();
@@ -141,18 +146,28 @@ function renderSidebar() {
     let icon = (idx + 1);
     let extra = "";
 
+    if (lesson.isVip) {
+      extra = `<span class="lesson-vip-tag">👑 VIP ${formatVnd(lesson.price || BANK_CONFIG.defaultPrice)}</span>`;
+    }
+
     if (status === 'completed') { cls += " completed"; icon = "✓"; }
     else if (status === 'locked-prerequisite') { cls += " locked"; icon = "🔒"; }
-    else if (status === 'locked-expired') { cls += " expired"; icon = "⌛"; }
+    else if (status === 'locked-expired') {
+      cls += " expired"; icon = "⌛";
+      extra = `<span class="lesson-expired-tag">Hết hạn</span>`;
+    }
+    else if (status === 'locked-vip') {
+      cls += " vip-locked"; icon = "👑";
+    }
     else if (status === 'available') {
       const ms = getRemainingMs(lesson.id, userProgress);
       if (ms != null && !isAdmin(currentUser)) {
         const urgent = ms < 60 * 60 * 1000;
-        extra = `<span class="lesson-countdown${urgent ? ' urgent' : ''}">${formatRemaining(ms)}</span>`;
+        // Replace extra (if there was a VIP tag, hide it since user paid)
+        if (!lesson.isVip || (userProgress.paidLessons || []).includes(lesson.id)) {
+          extra = `<span class="lesson-countdown${urgent ? ' urgent' : ''}">${formatRemaining(ms)}</span>`;
+        }
       }
-    }
-    if (status === 'locked-expired') {
-      extra = `<span class="lesson-expired-tag">Hết hạn</span>`;
     }
     if (active) cls += " active";
 
@@ -188,13 +203,22 @@ function renderSidebar() {
 
 function loadLesson(index) {
   if (index < 0 || index >= currentLessons.length) return;
+  const lesson = currentLessons[index];
   const status = getLessonStatus(currentLessons, index, userProgress);
 
   if (!isAdmin(currentUser)) {
     if (status === 'locked-prerequisite') return;
+
+    if (status === 'locked-vip') {
+      currentLessonIndex = index;
+      history.replaceState(null, "", `#${lesson.id}`);
+      renderVipPaymentNotice(lesson);
+      renderSidebar();
+      return;
+    }
+
     if (status === 'locked-expired') {
       currentLessonIndex = index;
-      const lesson = currentLessons[index];
       history.replaceState(null, "", `#${lesson.id}`);
       renderExpiredNotice(lesson);
       renderSidebar();
@@ -203,7 +227,6 @@ function loadLesson(index) {
   }
 
   currentLessonIndex = index;
-  const lesson = currentLessons[index];
   history.replaceState(null, "", `#${lesson.id}`);
 
   const videoWrap = document.getElementById("video-wrap");
@@ -214,7 +237,6 @@ function loadLesson(index) {
       <div class="video-placeholder">
         <div class="icon">▶</div>
         <div><strong>Video chưa được cấu hình</strong></div>
-        <div style="font-size:13px">Admin cần thêm Google Drive File ID vào bài học này</div>
       </div>`;
   }
 
@@ -247,6 +269,154 @@ function loadLesson(index) {
   renderSidebar();
 }
 
+async function renderVipPaymentNotice(lesson) {
+  const price = lesson.price || BANK_CONFIG.defaultPrice;
+
+  // Check existing payment status
+  const existingPayment = await fetchMyPaymentForLesson(currentUser.uid, lesson.id);
+
+  const videoWrap = document.getElementById("video-wrap");
+  videoWrap.innerHTML = `
+    <div class="video-placeholder" style="background: linear-gradient(135deg, #1a1a1a, #2a1f0a)">
+      <div class="icon" style="color:var(--accent);font-size:80px">👑</div>
+      <div><strong style="font-size:18px">Bài học VIP</strong></div>
+      <div style="font-size:13px;margin-top:8px">Cần thanh toán để xem nội dung</div>
+    </div>`;
+
+  document.getElementById("lesson-title-big").textContent = lesson.title;
+  document.getElementById("lesson-badge").textContent = "👑 VIP";
+  document.getElementById("lesson-badge").classList.remove("done");
+
+  // Render payment UI in lesson-description area
+  const descEl = document.getElementById("lesson-description");
+
+  if (existingPayment && existingPayment.status === 'pending') {
+    descEl.innerHTML = renderPendingPayment(existingPayment, lesson, price);
+  } else if (existingPayment && existingPayment.status === 'rejected') {
+    descEl.innerHTML = renderPaymentForm(lesson, price, true);
+    bindPaymentButton(lesson, price);
+  } else {
+    descEl.innerHTML = renderPaymentForm(lesson, price, false);
+    bindPaymentButton(lesson, price);
+  }
+
+  document.getElementById("timer-info").innerHTML = `<span class="timer-icon">👑</span><span>Bài VIP — thanh toán để mở khóa nội dung</span>`;
+  document.getElementById("btn-done").disabled = true;
+  document.getElementById("btn-done").textContent = "Bài VIP";
+  document.getElementById("btn-prev").disabled = (currentLessonIndex === 0);
+  document.getElementById("btn-next").disabled = true;
+  if (videoTimerId) clearInterval(videoTimerId);
+}
+
+function renderPaymentForm(lesson, price, wasRejected) {
+  return `
+    <div class="vip-notice">
+      ${wasRejected ? `<div class="vip-warn">⚠️ Lần thanh toán trước bị từ chối. Vui lòng kiểm tra lại nội dung chuyển khoản.</div>` : ""}
+      <h3>👑 Bài học này yêu cầu thanh toán</h3>
+      <div class="vip-price">${formatVnd(price)}</div>
+      <p class="vip-instructions">
+        Chuyển khoản theo thông tin bên dưới. Sau khi chuyển xong, bấm
+        <strong>"Tôi đã thanh toán"</strong> để gửi yêu cầu lên admin.
+      </p>
+      <button class="btn btn-primary" id="btn-show-qr">📱 Hiện QR thanh toán</button>
+    </div>
+  `;
+}
+
+function renderPendingPayment(payment, lesson, price) {
+  return `
+    <div class="vip-notice pending">
+      <h3>⏳ Đang chờ admin duyệt thanh toán</h3>
+      <p class="vip-instructions">
+        Yêu cầu của bạn đã được gửi. Admin sẽ kiểm tra giao dịch và duyệt trong thời gian ngắn.
+      </p>
+      <div class="vip-info-row"><span>Số tiền:</span> <strong>${formatVnd(payment.amount)}</strong></div>
+      <div class="vip-info-row"><span>Nội dung CK:</span> <strong>${escapeHtml(payment.transferContent)}</strong></div>
+      <button class="btn btn-secondary" id="btn-show-qr">📱 Xem lại QR</button>
+      <p style="margin-top:16px;font-size:13px;color:var(--text-mute)">
+        Nếu đã chờ lâu mà chưa được duyệt, vui lòng liên hệ admin để hỗ trợ.
+      </p>
+    </div>
+  `;
+}
+
+function bindPaymentButton(lesson, price) {
+  const btn = document.getElementById("btn-show-qr");
+  if (!btn) return;
+  btn.addEventListener("click", () => showPaymentModal(lesson, price));
+}
+
+async function showPaymentModal(lesson, price) {
+  // Create payment record (or fetch existing pending)
+  let payment;
+  try {
+    payment = await createPayment(
+      currentUser.uid,
+      currentUser.email,
+      lesson.id,
+      currentCourse.id,
+      currentCourse.title,
+      lesson.title,
+      price
+    );
+  } catch (err) {
+    flashMessage("Lỗi tạo yêu cầu thanh toán: " + err.message, "error");
+    return;
+  }
+
+  const qrUrl = buildVietQrUrl(price, payment.transferContent);
+
+  // Create modal
+  let modal = document.getElementById("payment-modal");
+  if (modal) modal.remove();
+  modal = document.createElement("div");
+  modal.id = "payment-modal";
+  modal.className = "modal-overlay active";
+  modal.innerHTML = `
+    <div class="modal payment-modal">
+      <div class="modal-header">
+        <h2>💳 Quét QR thanh toán</h2>
+        <button class="modal-close" data-close-payment>×</button>
+      </div>
+      <div class="modal-body">
+        <div class="payment-qr-wrap">
+          <img src="${qrUrl}" alt="QR thanh toán" class="payment-qr" />
+        </div>
+        <div class="payment-info">
+          <div class="payment-row"><span>Ngân hàng:</span> <strong>${escapeHtml(BANK_CONFIG.bankName)}</strong></div>
+          <div class="payment-row"><span>Số tài khoản:</span> <strong>${escapeHtml(BANK_CONFIG.accountNo)}</strong></div>
+          <div class="payment-row"><span>Tên chủ TK:</span> <strong>${escapeHtml(BANK_CONFIG.accountName)}</strong></div>
+          <div class="payment-row highlight"><span>Số tiền:</span> <strong>${formatVnd(price)}</strong></div>
+          <div class="payment-row highlight"><span>Nội dung CK:</span> <strong>${escapeHtml(payment.transferContent)}</strong></div>
+        </div>
+        <p class="payment-note">
+          ⚠️ <strong>Quan trọng:</strong> Nhập <strong>đúng nội dung CK</strong> ở trên để admin biết bạn thanh toán bài nào.
+          Sau khi chuyển khoản xong, bấm nút bên dưới để gửi yêu cầu duyệt.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close-payment>Đóng</button>
+        <button class="btn btn-primary" id="btn-confirm-paid">✅ Tôi đã thanh toán</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.querySelectorAll("[data-close-payment]").forEach(el => {
+    el.addEventListener("click", () => modal.remove());
+  });
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) modal.remove();
+  });
+
+  document.getElementById("btn-confirm-paid").addEventListener("click", () => {
+    modal.remove();
+    flashMessage("✓ Đã gửi yêu cầu! Đang chờ admin duyệt...", "success");
+    // Reload lesson to show "pending" state
+    setTimeout(() => renderVipPaymentNotice(lesson), 800);
+  });
+}
+
 function renderExpiredNotice(lesson) {
   const videoWrap = document.getElementById("video-wrap");
   videoWrap.innerHTML = `
@@ -259,8 +429,8 @@ function renderExpiredNotice(lesson) {
     <div class="expired-notice">
       <div class="icon">⌛</div>
       <h3>Bài học đã bị khóa</h3>
-      <p>Bạn không hoàn thành bài này trong 24h kể từ lúc được mở. Hệ thống đã tự động khóa.</p>
-      <p>Vui lòng liên hệ admin để được mở lại nếu cần thiết.</p>
+      <p>Bạn không hoàn thành bài này trong 24h kể từ lúc được mở.</p>
+      <p>Vui lòng liên hệ admin để được mở lại.</p>
     </div>`;
   const badge = document.getElementById("lesson-badge");
   badge.textContent = "⌛ Hết hạn";
@@ -360,7 +530,8 @@ async function completeCurrentLesson(forceOverride = false) {
 
   try {
     const nextLesson = currentLessons[currentLessonIndex + 1];
-    const nextId = nextLesson ? nextLesson.id : null;
+    // Nếu bài kế tiếp là VIP, KHÔNG set timer (vì user phải pay trước)
+    const nextId = (nextLesson && !nextLesson.isVip) ? nextLesson.id : null;
     const result = await markLessonCompleted(currentUser.uid, lesson.id, nextId);
     userProgress.completed = result.completed;
     userProgress.unlockedAt = result.unlockedAt;
@@ -369,7 +540,7 @@ async function completeCurrentLesson(forceOverride = false) {
 
     const nextIdx = currentLessonIndex + 1;
     if (nextIdx < currentLessons.length) {
-      flashMessage("✓ Đã hoàn thành! Bài kế tiếp đã mở khóa, có 24h để hoàn thành.", "success");
+      flashMessage("✓ Đã hoàn thành! Chuyển sang bài tiếp theo...", "success");
       setTimeout(() => loadLesson(nextIdx), 1100);
     } else {
       flashMessage("🎉 Chúc mừng! Bạn đã hoàn thành khóa học!", "success");
@@ -385,9 +556,6 @@ function gotoPrev() {
 function gotoNext() {
   const next = currentLessonIndex + 1;
   if (next < currentLessons.length) {
-    const status = getLessonStatus(currentLessons, next, userProgress);
-    if (status === 'available' || status === 'completed' || isAdmin(currentUser)) {
-      loadLesson(next);
-    }
+    loadLesson(next); // loadLesson handle status check
   }
 }
