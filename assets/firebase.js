@@ -66,6 +66,13 @@ export function buildTransferContent(userId, lessonId) {
   return `AVA${u}${l}`;
 }
 
+/** Tạo nội dung chuyển khoản unique cho khóa */
+export function buildCourseTransferContent(userId, courseId) {
+  const u = userId.slice(0, 6).toUpperCase();
+  const c = courseId.slice(-5).toUpperCase();
+  return `AVAK${u}${c}`;
+}
+
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
@@ -171,6 +178,8 @@ export async function createCourse(data) {
     thumbnail: data.thumbnail || "",
     lessons: data.lessons || [],
     order: maxOrder + 1,
+    isVip: !!data.isVip,
+    price: data.price || 0,
     createdAt: serverTimestamp()
   });
   return ref.id;
@@ -186,12 +195,13 @@ export async function deleteCourse(courseId) {
 
 export async function fetchUserProgress(userId) {
   const snap = await getDoc(doc(db, "userProgress", userId));
-  if (!snap.exists()) return { completed: [], unlockedAt: {}, paidLessons: [] };
+  if (!snap.exists()) return { completed: [], unlockedAt: {}, paidLessons: [], paidCourses: [] };
   const data = snap.data();
   return {
     completed: data.completed || [],
     unlockedAt: data.unlockedAt || {},
     paidLessons: data.paidLessons || [],
+    paidCourses: data.paidCourses || [],
     lastUpdate: data.lastUpdate
   };
 }
@@ -295,6 +305,7 @@ export async function createPayment(userId, userEmail, lessonId, courseId, cours
   const ref = await addDoc(collection(db, "payments"), {
     userId,
     userEmail: userEmail || "",
+    type: "lesson",
     lessonId,
     courseId,
     courseTitle: courseTitle || "",
@@ -307,12 +318,65 @@ export async function createPayment(userId, userEmail, lessonId, courseId, cours
   return {
     id: ref.id,
     userId,
+    type: "lesson",
     lessonId,
     courseId,
     amount,
     transferContent,
     status: "pending"
   };
+}
+
+/** User tạo yêu cầu thanh toán cho cả KHÓA (status: pending) */
+export async function createCoursePayment(userId, userEmail, courseId, courseTitle, amount) {
+  const transferContent = buildCourseTransferContent(userId, courseId);
+  const existing = await getDocs(query(
+    collection(db, "payments"),
+    where("userId", "==", userId),
+    where("courseId", "==", courseId),
+    where("type", "==", "course"),
+    where("status", "==", "pending")
+  ));
+  if (!existing.empty) {
+    const d = existing.docs[0];
+    return { id: d.id, ...d.data() };
+  }
+  const ref = await addDoc(collection(db, "payments"), {
+    userId,
+    userEmail: userEmail || "",
+    type: "course",
+    lessonId: "",
+    courseId,
+    courseTitle: courseTitle || "",
+    lessonTitle: "",
+    amount,
+    transferContent,
+    status: "pending",
+    createdAt: serverTimestamp()
+  });
+  return {
+    id: ref.id,
+    userId,
+    type: "course",
+    courseId,
+    amount,
+    transferContent,
+    status: "pending"
+  };
+}
+
+/** User check trạng thái thanh toán cho 1 khóa */
+export async function fetchMyPaymentForCourse(userId, courseId) {
+  const snap = await getDocs(query(
+    collection(db, "payments"),
+    where("userId", "==", userId),
+    where("courseId", "==", courseId),
+    where("type", "==", "course")
+  ));
+  if (snap.empty) return null;
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  return items[0];
 }
 
 /** User check trạng thái thanh toán cho 1 bài */
@@ -359,6 +423,26 @@ export async function approvePayment(paymentId, userId, lessonId, adminUid) {
   }
   await setDoc(progRef, {
     paidLessons,
+    lastUpdate: serverTimestamp()
+  }, { merge: true });
+}
+
+/** Admin duyệt payment KHÓA → thêm courseId vào paidCourses của user */
+export async function approveCoursePayment(paymentId, userId, courseId, adminUid) {
+  await updateDoc(doc(db, "payments", paymentId), {
+    status: "approved",
+    approvedAt: serverTimestamp(),
+    approvedBy: adminUid
+  });
+  const progRef = doc(db, "userProgress", userId);
+  const snap = await getDoc(progRef);
+  const data = snap.exists() ? snap.data() : {};
+  const paidCourses = data.paidCourses || [];
+  if (!paidCourses.includes(courseId)) {
+    paidCourses.push(courseId);
+  }
+  await setDoc(progRef, {
+    paidCourses,
     lastUpdate: serverTimestamp()
   }, { merge: true });
 }
