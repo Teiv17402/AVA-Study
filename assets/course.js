@@ -17,6 +17,7 @@ import {
   recordViolation,
   checkBanned,
   saveQuizScore,
+  submitQuizAnswers,
   validateCoupon,
   incrementCouponUsage,
   buildVietQrUrl,
@@ -356,12 +357,14 @@ function renderQuizSection(lesson) {
   const isDone = (userProgress.completed || []).includes(lesson.id);
   const bestScore = (userProgress.quizScores || {})[lesson.id] || 0;
 
-  // Shuffle questions and each question's options
-  const shuffled = shuffleArray(quiz).map(q => {
+  // Shuffle questions while tracking original index for server-side validation
+  const indexed = quiz.map((q, idx) => ({ ...q, _origQIdx: idx }));
+  const shuffled = shuffleArray(indexed).map(q => {
     const opts = (q.opts || []).map((text, origIdx) => ({ text, origIdx }));
     const shuffledOpts = shuffleArray(opts);
-    return { q: q.q, opts: shuffledOpts, correctOrigIdx: q.correct };
+    return { q: q.q, originalQIdx: q._origQIdx, opts: shuffledOpts };
   });
+window.__quizStartTime = Date.now();
 
   // Insert quiz right below the video card
   const section = document.createElement("div");
@@ -407,38 +410,46 @@ function renderQuizSection(lesson) {
 async function handleQuizSubmit(lesson, shuffled) {
   const form = document.getElementById("quiz-form");
   const result = document.getElementById("quiz-result");
+  const submitBtn = form.querySelector(".quiz-submit");
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Đang chấm..."; }
 
-  let correctCount = 0;
+  // Build answers in ORIGINAL question order (server expects this)
   const total = shuffled.length;
+  const answers = new Array(total).fill(-1);
   shuffled.forEach((q, i) => {
-    const row = form.querySelector(`[data-qi="${i}"]`);
     const selected = form.querySelector(`input[name="qu-${i}"]:checked`);
-    if (!selected) {
-      row.classList.add("quiz-q-wrong");
-      return;
-    }
-    const selectedOrigIdx = parseInt(selected.value);
-    if (selectedOrigIdx === q.correctOrigIdx) {
-      row.classList.add("quiz-q-correct");
-      row.classList.remove("quiz-q-wrong");
-      correctCount++;
-    } else {
-      row.classList.add("quiz-q-wrong");
-      row.classList.remove("quiz-q-correct");
+    if (selected) {
+      answers[q.originalQIdx] = parseInt(selected.value);
     }
   });
 
-  const score = Math.round((correctCount / total) * 100);
-  const passed = score >= 90;
-
-  // Save to Firestore
+  // Server validates (no correct answer exposed to client)
+  let res;
   try {
-    await saveQuizScore(currentUser.uid, lesson.id, score);
-  } catch (e) {
-    console.warn("Lỗi lưu điểm quiz:", e);
+    const durationMs = Date.now() - (window.__quizStartTime || Date.now());
+    res = await submitQuizAnswers(lesson.id, answers, durationMs);
+  } catch (err) {
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "📤 Nộp bài"; }
+    result.innerHTML = `<div class="quiz-result-card failed"><div class="quiz-result-icon">⚠️</div><div class="quiz-result-msg">${escapeHtml(err.message || 'Lỗi gửi quiz')}</div></div>`;
+    return;
   }
 
-  // Update local progress
+  const { correctCount, score, passed, wrongIndices } = res;
+
+  // Highlight wrong/correct by mapping back from originalQIdx → shuffled position
+  shuffled.forEach((q, i) => {
+    const row = form.querySelector(`[data-qi="${i}"]`);
+    if (!row) return;
+    if (wrongIndices && wrongIndices.includes(q.originalQIdx)) {
+      row.classList.add("quiz-q-wrong");
+      row.classList.remove("quiz-q-correct");
+    } else {
+      row.classList.add("quiz-q-correct");
+      row.classList.remove("quiz-q-wrong");
+    }
+  });
+
+  // Update local progress cache
   userProgress.quizScores = userProgress.quizScores || {};
   if (!userProgress.quizScores[lesson.id] || score > userProgress.quizScores[lesson.id]) {
     userProgress.quizScores[lesson.id] = score;
