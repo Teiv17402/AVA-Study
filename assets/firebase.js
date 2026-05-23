@@ -21,8 +21,8 @@ export const ADMIN_EMAILS = ["lehoangviet.17042002@gmail.com"];
 export const BANK_CONFIG = {
   bankCode: "MB",
   bankName: "MB Bank",
-  accountNo: "0123456789",
-  accountName: "NGUYEN VAN DEMO",
+  accountNo: "2168888868",
+  accountName: "LE HOANG VIET",
   defaultPrice: 99000
 };
 
