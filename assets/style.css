@@ -1819,3 +1819,207 @@ textarea { resize: vertical; min-height: 80px; }
 .notif-row .info { flex: 1; }
 .notif-row .info strong { color: #ef4444; }
 .notif-row .meta { font-size: 12px; color: var(--text-mute); margin-top: 2px; }
+
+
+/* === LOCKSCREEN OVERLAY (full-page) === */
+.lock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(8, 8, 8, 0.92);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: lockFadeIn 0.3s ease;
+}
+@keyframes lockFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.lock-overlay-inner {
+  max-width: 480px;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(212,175,110,0.08), rgba(20,20,20,0.6));
+  border: 1px solid rgba(212,175,110,0.3);
+  border-radius: 18px;
+  padding: 40px 32px 36px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+.lock-icon-big {
+  width: 110px;
+  height: 130px;
+  margin: 0 auto 22px;
+  color: #d4af6e;
+  filter: drop-shadow(0 4px 16px rgba(212,175,110,0.4));
+}
+.lock-icon-big svg { width: 100%; height: 100%; }
+.lock-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 30px;
+  font-weight: 700;
+  margin: 0 0 14px;
+  color: #fff;
+}
+.lock-subtitle {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-soft);
+  margin: 0 0 10px;
+}
+.lock-hint {
+  font-size: 13px;
+  color: var(--text-mute);
+  margin: 8px 0 0;
+}
+.lock-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 24px;
+}
+.lock-actions .btn {
+  padding: 10px 22px;
+  font-weight: 600;
+}
+
+/* === LEADERBOARD PODIUM v2 (kiểu ảnh tham chiếu) === */
+.leaderboard-podium {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr 1fr;
+  gap: 14px;
+  align-items: end;
+  margin: 30px auto 40px;
+  max-width: 700px;
+  padding: 0 12px;
+}
+.podium-slot {
+  position: relative;
+  background: linear-gradient(180deg, rgba(40,40,40,0.5), rgba(15,15,15,0.85));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 50px 16px 24px;
+  text-align: center;
+  transition: 0.25s ease;
+}
+
+/* Medal/cup floating above card */
+.podium-slot::before {
+  content: "";
+  position: absolute;
+  top: -34px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 64px;
+  height: 64px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.podium-slot.first {
+  border: 2px solid rgba(212,175,110,0.5);
+  background: linear-gradient(180deg, rgba(212,175,110,0.12), rgba(20,20,20,0.9));
+  padding-top: 64px;
+  transform: translateY(-30px);
+  box-shadow: 0 10px 40px rgba(212,175,110,0.2);
+}
+.podium-slot.first::before {
+  width: 80px; height: 80px; top: -54px;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 80"><path d="M16 8v22a16 16 0 0032 0V8H16z" fill="%23d4af6e"/><path d="M14 14H4v8a10 10 0 0010 10V14zM50 14h10v8a10 10 0 01-10 10V14z" stroke="%23d4af6e" stroke-width="3" fill="none"/><path d="M26 52h12v8h6v6H20v-6h6v-8z" fill="%23d4af6e"/></svg>');
+}
+.podium-slot.second::before {
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 80"><path d="M32 8L20 22h-8l-4 16h12v6h24v-6h12L52 22h-8L32 8z" fill="%23c0c5d0"/><circle cx="32" cy="50" r="18" fill="%23dde0e8" stroke="%23a0a8b8" stroke-width="2"/><text x="32" y="56" text-anchor="middle" font-size="20" font-weight="bold" fill="%23495162">2</text></svg>');
+}
+.podium-slot.third::before {
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 80"><path d="M32 8L20 22h-8l-4 16h12v6h24v-6h12L52 22h-8L32 8z" fill="%23cd7f32"/><circle cx="32" cy="50" r="18" fill="%23d97732" stroke="%23a05a1f" stroke-width="2"/><text x="32" y="56" text-anchor="middle" font-size="20" font-weight="bold" fill="%23fff">3</text></svg>');
+}
+
+/* Big number circle inside card */
+.podium-num-circle {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.05);
+  border: 2px solid rgba(255,255,255,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 800;
+  margin: 0 auto 14px;
+  color: #fff;
+}
+.podium-slot.first .podium-num-circle {
+  background: rgba(212,175,110,0.15);
+  border-color: #d4af6e;
+  color: #d4af6e;
+}
+
+.podium-name {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #fff;
+  margin: 8px 0 12px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+}
+.podium-score-main {
+  font-size: 24px;
+  font-weight: 800;
+  color: #d4af6e;
+  letter-spacing: -0.5px;
+}
+.podium-slot.first .podium-score-main { font-size: 28px; }
+.podium-stat-label {
+  font-size: 10px;
+  color: var(--text-mute);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 4px;
+}
+.podium-medal { display: none; } /* hide old emoji */
+.podium-avatar { display: none; }
+.podium-rank { display: none; }
+.podium-score { display: none; }
+
+/* === Score formula explainer === */
+.formula-card {
+  background: rgba(212,175,110,0.05);
+  border: 1px solid rgba(212,175,110,0.2);
+  border-radius: 12px;
+  padding: 18px 22px;
+  margin: 30px 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.formula-card h3 {
+  font-size: 14px;
+  color: #d4af6e;
+  margin: 0 0 10px;
+  font-weight: 700;
+}
+.formula-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 6px 16px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.formula-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px dashed rgba(255,255,255,0.05);
+}
+.formula-list strong { color: #d4af6e; font-weight: 700; }
+.formula-list .neg { color: #ef4444; }
+
+@media (max-width: 600px) {
+  .leaderboard-podium { grid-template-columns: 1fr; gap: 30px; }
+  .podium-slot.first { transform: none; }
+}
