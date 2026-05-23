@@ -759,6 +759,21 @@ export async function toggleCoupon(couponId, active) {
   await updateDoc(doc(db, "coupons", couponId), { active });
 }
 
+/** Admin: cập nhật coupon (KHÔNG đổi code, KHÔNG reset usedCount) */
+export async function updateCoupon(couponId, data) {
+  // Whitelist updatable fields — không cho update code/usedCount
+  const allowed = {};
+  if (data.discountType !== undefined) allowed.discountType = data.discountType;
+  if (data.discountValue !== undefined) allowed.discountValue = data.discountValue;
+  if (data.appliesTo !== undefined) allowed.appliesTo = data.appliesTo;
+  if (data.courseIds !== undefined) allowed.courseIds = data.courseIds;
+  if (data.lessonIds !== undefined) allowed.lessonIds = data.lessonIds;
+  if (data.expiresAt !== undefined) allowed.expiresAt = data.expiresAt;
+  if (data.maxUses !== undefined) allowed.maxUses = data.maxUses;
+  if (data.active !== undefined) allowed.active = data.active;
+  await updateDoc(doc(db, "coupons", couponId), allowed);
+}
+
 /** USER: validate coupon code khi thanh toán
  *  @param code - mã coupon (uppercase)
  *  @param type - "lesson" hoặc "course"
