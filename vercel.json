@@ -3,6 +3,10 @@
     {
       "path": "/api/admin-weekly-report",
       "schedule": "0 1 * * 1"
+    },
+    {
+      "path": "/api/inactive-reminder",
+      "schedule": "0 13 * * *"
     }
   ]
 }
