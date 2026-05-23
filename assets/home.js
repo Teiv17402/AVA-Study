@@ -6,6 +6,7 @@ import {
   fetchCourses,
   fetchUserProgress,
   isAdmin,
+  checkBanned,
   BANK_CONFIG
 } from "./firebase.js";
 import {
@@ -32,6 +33,23 @@ export async function initHomePage() {
     ]);
 
     const completed = progress.completed || [];
+
+    // Show ban banner if user banned
+    if (!isAdmin(user)) {
+      const ban = checkBanned(progress);
+      if (ban.isBanned) {
+        const banBanner = document.createElement("div");
+        banBanner.className = "ban-banner";
+        const until = new Date(ban.until).toLocaleString("vi-VN");
+        banBanner.innerHTML = `
+          <div class="ban-banner-icon">⛔</div>
+          <div class="ban-banner-text">
+            <strong>Tài khoản đang bị khóa ${ban.daysLeft} ngày</strong> do vi phạm cam kết học tập.
+            Hết hạn: <strong>${until}</strong>. Bạn không xem được bài trong thời gian này.
+          </div>`;
+        grid.parentNode.insertBefore(banBanner, grid);
+      }
+    }
 
     if (!courses.length) {
       const admin = isAdmin(user);
