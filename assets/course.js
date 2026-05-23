@@ -14,6 +14,8 @@ import {
   fetchMyPaymentForCourse,
   selfApprovePayment,
   selfApproveCoursePayment,
+  recordViolation,
+  checkBanned,
   buildVietQrUrl,
   BANK_CONFIG,
   isAdmin
@@ -76,6 +78,15 @@ export async function initCoursePage() {
     currentCourse = course;
     currentLessons = (course.lessons || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
     userProgress = progress;
+
+    // BAN CHECK — hard ban toàn hệ thống nếu vi phạm
+    if (!isAdmin(currentUser)) {
+      const ban = checkBanned(userProgress);
+      if (ban.isBanned) {
+        renderBannedScreen(ban);
+        return;
+      }
+    }
 
     if (!currentLessons.length) {
       document.querySelector(".main-content").innerHTML = `
@@ -239,6 +250,27 @@ function loadLesson(index) {
       history.replaceState(null, "", `#${lesson.id}`);
       renderExpiredNotice(lesson);
       renderSidebar();
+      // Record violation (idempotent per lesson)
+      (async () => {
+        try {
+          const result = await recordViolation(
+            currentUser.uid, currentUser.email, currentUser.displayName,
+            currentCourse.id, currentCourse.title,
+            lesson.id, lesson.title
+          );
+          if (!result.alreadyRecorded) {
+            const updated = await fetchUserProgress(currentUser.uid);
+            userProgress = updated;
+            if (result.bannedUntil > Date.now()) {
+              const days = Math.ceil((result.bannedUntil - Date.now()) / 86400000);
+              flashMessage(`⛔ Bạn đã bị khóa ${days} ngày do vi phạm lần ${result.count}.`, "error");
+              setTimeout(() => location.reload(), 2000);
+            } else if (result.count >= 3) {
+              flashMessage(`⚠️ Vi phạm lần ${result.count} — admin đã được thông báo.`, "error");
+            }
+          }
+        } catch (e) { console.warn("Lỗi ghi nhận vi phạm:", e); }
+      })();
       return;
     }
   }
@@ -601,6 +633,25 @@ async function showCoursePaymentModal(course, price) {
       confirmBtn.textContent = "✅ Tôi đã thanh toán";
     }
   });
+}
+
+function renderBannedScreen(ban) {
+  const until = new Date(ban.until).toLocaleString("vi-VN");
+  document.getElementById("course-layout").innerHTML = `
+    <div class="banned-screen">
+      <div class="banned-icon">⛔</div>
+      <h1>Tài khoản đang bị khóa</h1>
+      <p class="banned-subtitle">Bạn không thể truy cập bài học do vi phạm cam kết học tập (quá 24h chưa hoàn thành bài đã mở).</p>
+      <div class="banned-info">
+        <div><strong>Còn lại:</strong> <span style="color:#fbbf24">${ban.daysLeft} ngày</span></div>
+        <div><strong>Hết hạn khóa:</strong> ${until}</div>
+      </div>
+      <p style="margin-top:24px;color:var(--text-mute);font-size:13px">
+        Trong thời gian này, bạn vẫn có thể duyệt trang chủ và xem điểm xếp hạng nhưng không xem được nội dung bài học.
+      </p>
+      <a href="home.html" class="btn btn-secondary" style="margin-top:20px">← Về trang chủ</a>
+    </div>
+  `;
 }
 
 function renderExpiredNotice(lesson) {
