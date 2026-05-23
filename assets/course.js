@@ -557,24 +557,10 @@ function bindPaymentButton(lesson, price) {
 }
 
 async function showPaymentModal(lesson, price) {
-  // Create payment record (or fetch existing pending)
-  let payment;
-  try {
-    payment = await createPayment(
-      currentUser.uid,
-      currentUser.email,
-      lesson.id,
-      currentCourse.id,
-      currentCourse.title,
-      lesson.title,
-      price
-    );
-  } catch (err) {
-    flashMessage("Lỗi tạo yêu cầu thanh toán: " + err.message, "error");
-    return;
-  }
-
-  const qrUrl = buildVietQrUrl(price, payment.transferContent);
+  // Generate transferContent client-side (don't create payment yet)
+  const transferContent = buildTransferContent(currentUser.uid, lesson.id);
+  const payment = { id: null, transferContent };
+  const qrUrl = buildVietQrUrl(price, transferContent);
 
   // Create modal
   let modal = document.getElementById("payment-modal");
@@ -663,13 +649,28 @@ async function showPaymentModal(lesson, price) {
   }
 
   document.getElementById("btn-confirm-paid").addEventListener("click", async () => {
-    // If coupon applied, increment usage
-    if (appliedCoupon) {
-      try { await incrementCouponUsage(appliedCoupon.couponId); } catch (e) {}
+    const confirmBtn = document.getElementById("btn-confirm-paid");
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "⏳ Đang gửi...";
+    try {
+      // Create payment record with FINAL price (after coupon applied)
+      await createPayment(
+        currentUser.uid, currentUser.email,
+        lesson.id, currentCourse.id,
+        currentCourse.title, lesson.title,
+        currentPrice
+      );
+      if (appliedCoupon) {
+        try { await incrementCouponUsage(appliedCoupon.couponId); } catch (e) {}
+      }
+      modal.remove();
+      flashMessage("✓ Đã gửi yêu cầu! Đang chờ admin duyệt...", "success");
+      setTimeout(() => renderVipPaymentNotice(lesson), 800);
+    } catch (err) {
+      flashMessage("Lỗi: " + err.message, "error");
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "✅ Tôi đã thanh toán";
     }
-    modal.remove();
-    flashMessage("✓ Đã gửi yêu cầu! Đang chờ admin duyệt...", "success");
-    setTimeout(() => renderVipPaymentNotice(lesson), 800);
   });
 }
 
@@ -757,21 +758,9 @@ function bindCoursePaymentButton(course, price) {
 }
 
 async function showCoursePaymentModal(course, price) {
-  let payment;
-  try {
-    payment = await createCoursePayment(
-      currentUser.uid,
-      currentUser.email,
-      course.id,
-      course.title,
-      price
-    );
-  } catch (err) {
-    flashMessage("Lỗi tạo yêu cầu thanh toán: " + err.message, "error");
-    return;
-  }
-
-  const qrUrl = buildVietQrUrl(price, payment.transferContent);
+  const transferContent = buildCourseTransferContent(currentUser.uid, course.id);
+  const payment = { id: null, transferContent };
+  const qrUrl = buildVietQrUrl(price, transferContent);
   const totalLessons = (course.lessons || []).length;
 
   let modal = document.getElementById("payment-modal");
@@ -854,12 +843,26 @@ async function showCoursePaymentModal(course, price) {
   });
 
   document.getElementById("btn-confirm-paid").addEventListener("click", async () => {
-    if (appliedCouponC) {
-      try { await incrementCouponUsage(appliedCouponC.couponId); } catch (e) {}
+    const confirmBtn = document.getElementById("btn-confirm-paid");
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "⏳ Đang gửi...";
+    try {
+      const finalPrice = appliedCouponC ? appliedCouponC.finalPrice : price;
+      await createCoursePayment(
+        currentUser.uid, currentUser.email,
+        course.id, course.title, finalPrice
+      );
+      if (appliedCouponC) {
+        try { await incrementCouponUsage(appliedCouponC.couponId); } catch (e) {}
+      }
+      modal.remove();
+      flashMessage("✓ Đã gửi yêu cầu mua khóa! Đang chờ admin duyệt...", "success");
+      setTimeout(() => renderCourseVipPaymentNotice(course, currentLessons[currentLessonIndex]), 800);
+    } catch (err) {
+      flashMessage("Lỗi: " + err.message, "error");
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "✅ Tôi đã thanh toán";
     }
-    modal.remove();
-    flashMessage("✓ Đã gửi yêu cầu mua khóa! Đang chờ admin duyệt...", "success");
-    setTimeout(() => renderCourseVipPaymentNotice(course, currentLessons[currentLessonIndex]), 800);
   });
 }
 
