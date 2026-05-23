@@ -19,6 +19,7 @@ export function renderHeader(user) {
     : `<div style="width:28px;height:28px;border-radius:50%;background:#d4af6e;color:#000;display:flex;align-items:center;justify-content:center;font-weight:700;">${(user.displayName || user.email || "U")[0].toUpperCase()}</div>`;
 
   el.innerHTML = `
+    <a class="btn-header" href="leaderboard.html" title="Bảng xếp hạng">🏆 Xếp hạng</a>
     ${admin ? `<a class="btn-header" href="admin.html" title="Trang quản trị">⚙ Quản trị</a>` : ""}
     <div class="user-chip" title="${escapeHtml(user.email)}">
       ${avatar}
