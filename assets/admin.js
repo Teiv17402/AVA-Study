@@ -25,7 +25,7 @@ import {
   createCoupon,
   fetchCoupons,
   deleteCoupon,
-  toggleCoupon
+  toggleCoupon,
   BANK_CONFIG
 } from "./firebase.js";
 import {
