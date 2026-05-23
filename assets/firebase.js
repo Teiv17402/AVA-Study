@@ -195,13 +195,17 @@ export async function deleteCourse(courseId) {
 
 export async function fetchUserProgress(userId) {
   const snap = await getDoc(doc(db, "userProgress", userId));
-  if (!snap.exists()) return { completed: [], unlockedAt: {}, paidLessons: [], paidCourses: [] };
+  if (!snap.exists()) return { completed: [], unlockedAt: {}, paidLessons: [], paidCourses: [], quizScores: {}, quizAttempts: {} };
   const data = snap.data();
   return {
     completed: data.completed || [],
     unlockedAt: data.unlockedAt || {},
     paidLessons: data.paidLessons || [],
     paidCourses: data.paidCourses || [],
+    quizScores: data.quizScores || {},
+    quizAttempts: data.quizAttempts || {},
+    violations: data.violations || [],
+    bannedUntil: data.bannedUntil || 0,
     lastUpdate: data.lastUpdate
   };
 }
@@ -686,4 +690,24 @@ export async function fetchLeaderboard(courses) {
       return { user: u, progress: prog, score };
     })
     .sort((a, b) => b.score.total - a.score.total);
+}
+
+
+/** Lưu điểm quiz tốt nhất cho 1 bài + tăng attempts */
+export async function saveQuizScore(userId, lessonId, score) {
+  const ref = doc(db, "userProgress", userId);
+  const snap = await getDoc(ref);
+  const data = snap.exists() ? snap.data() : {};
+  const quizScores = data.quizScores || {};
+  const quizAttempts = data.quizAttempts || {};
+  // Chỉ lưu nếu score cao hơn lần trước
+  if (!quizScores[lessonId] || score > quizScores[lessonId]) {
+    quizScores[lessonId] = score;
+  }
+  quizAttempts[lessonId] = (quizAttempts[lessonId] || 0) + 1;
+  await setDoc(ref, {
+    quizScores, quizAttempts,
+    lastUpdate: serverTimestamp()
+  }, { merge: true });
+  return { score, bestScore: quizScores[lessonId], attempts: quizAttempts[lessonId] };
 }
