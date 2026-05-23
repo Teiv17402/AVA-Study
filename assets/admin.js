@@ -713,6 +713,21 @@ async function loadUsers() {
               await approvePayment(pid, uid, lessonId, currentUser.uid);
               flashMessage("✓ Đã duyệt! User có thể xem bài VIP.", "success");
             }
+            // Auto-send confirmation email to user
+            try {
+              const { supabase } = await import("./firebase.js");
+              const session = (await supabase.auth.getSession()).data.session;
+              if (session) {
+                const er = await fetch("/api/notify-payment", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", "Authorization": "Bearer " + session.access_token },
+                  body: JSON.stringify({ paymentId: pid })
+                });
+                const ed = await er.json();
+                if (ed.ok) flashMessage("📧 Email confirm đã gửi cho user", "info");
+                else console.warn("Email notify failed:", ed);
+              }
+            } catch (mailErr) { console.warn("Notify email error:", mailErr); }
           } else if (action === "verify") {
             await verifyAutoApproved(pid, currentUser.uid);
             flashMessage("✓ Đã xác nhận. Đơn này đã được đối chiếu với sao kê.", "success");
