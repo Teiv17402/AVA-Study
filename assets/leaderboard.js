@@ -1,5 +1,5 @@
 // ============================================
-// LEADERBOARD PAGE v2 — podium style + formula
+// LEADERBOARD PAGE v3 — clean podium
 // ============================================
 import {
   requireAuth,
@@ -54,34 +54,36 @@ function render() {
   const myCard = document.getElementById("my-rank-card");
 
   if (!sorted.length) {
-    podium.innerHTML = '<div class="empty-state" style="grid-column:1/-1;text-align:center;padding:40px"><div style="font-size:60px">🏆</div><p><strong>Chưa có dữ liệu xếp hạng</strong></p><p style="color:var(--text-mute);font-size:13px">Hãy hoàn thành bài học đầu tiên để xuất hiện trên bảng vàng!</p></div>';
+    podium.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px"><div style="font-size:60px">🏆</div><p><strong>Chưa có dữ liệu xếp hạng</strong></p><p style="color:var(--text-mute);font-size:13px">Hãy hoàn thành bài học đầu tiên để xuất hiện trên bảng vàng!</p></div>';
     list.innerHTML = "";
     myCard.innerHTML = "";
     return;
   }
 
-  // Podium: arrange visually 2-1-3 (silver-gold-bronze)
+  // Visual order: 2nd-1st-3rd
   const top = sorted.slice(0, 3);
-  const order = [1, 0, 2]; // 2nd, 1st, 3rd
-  const podiumClasses = ["second", "first", "third"];
+  const order = [1, 0, 2];
+  const cls = ["second", "first", "third"];
+  const pillIcon = { 0: "🥇", 1: "🥈", 2: "🥉" };
+  const pillLabel = { 0: "HẠNG 1", 1: "HẠNG 2", 2: "HẠNG 3" };
 
   podium.innerHTML = order.map((idx, slotPos) => {
     const e = top[idx];
-    if (!e) return `<div class="podium-slot ${podiumClasses[slotPos]} empty"></div>`;
-    const rank = idx + 1;
+    if (!e) return `<div class="podium-slot ${cls[slotPos]} empty"></div>`;
     return `
-      <div class="podium-slot ${podiumClasses[slotPos]}">
-        <div class="podium-num-circle">${rank}</div>
+      <div class="podium-slot ${cls[slotPos]}">
+        <div class="podium-rank-pill">${pillIcon[idx]} ${pillLabel[idx]}</div>
+        <div class="podium-num-circle">${idx + 1}</div>
         <div class="podium-name">${escapeHtml(e.user.displayName || e.user.email || "—")}</div>
         <div class="podium-score-main">${getScore(e)}</div>
         <div class="podium-stat-label">Điểm ${currentTab === "month" ? "tháng này" : "tổng"}</div>
-        <div style="font-size:11px;color:var(--text-mute);margin-top:6px">
-          📖 ${e.score.breakdown.lessonsCompleted} bài · 🎓 ${e.score.breakdown.coursesCompleted} khóa
+        <div class="podium-mini-stats">
+          📖 ${e.score.breakdown.lessonsCompleted} bài · 🎓 ${e.score.breakdown.coursesCompleted} khóa${e.score.breakdown.violations > 0 ? ` · ⚠️ ${e.score.breakdown.violations}` : ""}
         </div>
       </div>`;
   }).join("");
 
-  // List from rank 4+
+  // List + formula
   const rest = sorted.slice(3, 50);
   list.innerHTML = `
     <div class="formula-card">
@@ -90,7 +92,7 @@ function render() {
         <li><span>Mỗi bài hoàn thành</span><strong>+10đ</strong></li>
         <li><span>Mỗi khóa hoàn thành</span><strong>+100đ</strong></li>
         <li><span>Quiz đạt ≥95%</span><strong>+20đ / bài</strong></li>
-        <li><span>Vi phạm timer 24h</span><strong class="neg">-10đ / lần</strong></li>
+        <li><span>Vi phạm timer 24h</span><strong class="neg">−10đ / lần</strong></li>
       </ul>
       <p style="margin-top:10px;color:var(--text-mute);font-size:12px;font-style:italic">
         "Tháng này" chỉ tính bài hoàn thành & vi phạm trong tháng hiện tại. Top mỗi tháng sẽ được tặng quà.
@@ -98,7 +100,7 @@ function render() {
     </div>
 
     ${rest.length ? `
-    <h3 style="margin:20px 0 12px;color:var(--text-mute);font-size:13px;text-transform:uppercase;letter-spacing:1px">Hạng 4 trở xuống</h3>
+    <h3 style="margin:24px 0 12px;color:var(--text-mute);font-size:13px;text-transform:uppercase;letter-spacing:1px">Hạng 4 trở xuống</h3>
     <table class="lb-table">
       <thead>
         <tr>
@@ -125,7 +127,7 @@ function render() {
     </table>` : ""}
   `;
 
-  // My rank card
+  // My rank
   const myIdx = sorted.findIndex(e => e.user.id === currentUser.uid);
   if (myIdx >= 0) {
     const me = sorted[myIdx];
@@ -135,12 +137,10 @@ function render() {
           <div class="my-rank-label">Hạng của bạn (${currentTab === "month" ? "tháng này" : "tổng"})</div>
           <div class="my-rank-value">#${myIdx + 1}</div>
         </div>
-        <div></div>
-        <div class="my-rank-score">${getScore(me)} điểm</div>
         <div class="my-rank-breakdown">
-          📖 ${me.score.breakdown.lessonsCompleted} bài · 🎓 ${me.score.breakdown.coursesCompleted} khóa
-          ${me.score.breakdown.violations > 0 ? ` · ⚠️ ${me.score.breakdown.violations} vi phạm` : ""}
+          📖 ${me.score.breakdown.lessonsCompleted} bài · 🎓 ${me.score.breakdown.coursesCompleted} khóa${me.score.breakdown.violations > 0 ? ` · ⚠️ ${me.score.breakdown.violations} vi phạm` : ""}
         </div>
+        <div class="my-rank-score">${getScore(me)} điểm</div>
       </div>`;
   } else {
     myCard.innerHTML = "";
