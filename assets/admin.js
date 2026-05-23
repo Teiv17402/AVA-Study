@@ -27,6 +27,7 @@ import {
   deleteCoupon,
   toggleCoupon,
   updateCoupon,
+  revokeUserPaidAccess,
   BANK_CONFIG
 } from "./firebase.js";
 import {
@@ -811,19 +812,31 @@ function showUserDetail(user, prog) {
 
     <div class="detail-section">
       <h3>👑 Khóa VIP đã mua (${paidCourses.length})</h3>
-      ${renderList(paidCourses, id => {
-        const title = courseMap[id] || `<em>Khóa đã xóa</em> (id: ${escapeHtml(id)})`;
-        return `<strong style="color:var(--accent)">${escapeHtml(title)}</strong>`;
-      }, "Chưa mua khóa VIP nào.")}
+      ${paidCourses.length === 0
+        ? '<p style="color:var(--text-mute);font-style:italic">Chưa mua khóa VIP nào.</p>'
+        : '<ul class="detail-list">' + paidCourses.map(id => {
+            const title = courseMap[id] || `<em>Khóa đã xóa</em>`;
+            return `<li style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+              <span><strong style="color:var(--accent)">${typeof title === 'string' ? escapeHtml(title) : title}</strong></span>
+              <button class="btn btn-danger btn-sm" data-revoke-type="course" data-revoke-id="${escapeHtml(id)}" title="Thu hồi VIP">✗ Thu hồi</button>
+            </li>`;
+          }).join("") + '</ul>'}
     </div>
 
     <div class="detail-section">
       <h3>📖 Bài VIP đã mua (${paidLessons.length})</h3>
-      ${renderList(paidLessons, id => {
-        const info = lessonMap[id];
-        if (info) return `<strong>${escapeHtml(info.title)}</strong> <span style="color:var(--text-mute)">— ${escapeHtml(info.courseTitle)}</span>`;
-        return `<em>Bài đã xóa</em> (id: ${escapeHtml(id)})`;
-      }, "Chưa mua bài VIP nào.")}
+      ${paidLessons.length === 0
+        ? '<p style="color:var(--text-mute);font-style:italic">Chưa mua bài VIP nào.</p>'
+        : '<ul class="detail-list">' + paidLessons.map(id => {
+            const info = lessonMap[id];
+            const label = info
+              ? `<strong>${escapeHtml(info.title)}</strong> <span style="color:var(--text-mute)">— ${escapeHtml(info.courseTitle)}</span>`
+              : '<em>Bài đã xóa</em>';
+            return `<li style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+              <span>${label}</span>
+              <button class="btn btn-danger btn-sm" data-revoke-type="lesson" data-revoke-id="${escapeHtml(id)}" title="Thu hồi VIP">✗ Thu hồi</button>
+            </li>`;
+          }).join("") + '</ul>'}
     </div>
 
     <div class="detail-section">
@@ -836,6 +849,28 @@ function showUserDetail(user, prog) {
     </div>
   `;
   modal.classList.add("active");
+
+  // Bind revoke buttons
+  modal.querySelectorAll("[data-revoke-type]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const type = btn.dataset.revokeType;
+      const targetId = btn.dataset.revokeId;
+      const label = type === "course" ? "khóa" : "bài";
+      if (!confirm(`Thu hồi quyền xem ${label} này của user? User sẽ không xem được nữa nhưng payment vẫn giữ.`)) return;
+      btn.disabled = true;
+      btn.textContent = "Đang xử lý...";
+      try {
+        await revokeUserPaidAccess(user.id, type, targetId);
+        flashMessage(`✓ Đã thu hồi quyền xem ${label}`, "success");
+        modal.classList.remove("active");
+        await loadUsers();
+      } catch (err) {
+        flashMessage("Lỗi: " + err.message, "error");
+        btn.disabled = false;
+        btn.textContent = "✗ Thu hồi";
+      }
+    });
+  });
 }
 
 // ============================================
