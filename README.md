@@ -124,3 +124,6 @@ Rồi publish lại Rules trên Firebase Console.
 → Kiểm tra:
 1. File Drive đã share **"Bất kỳ ai có liên kết"** chưa?
 2. File ID có đúng không? (copy chính xác phần giữa `/d/` và `/view`)
+
+
+<!-- supabase-migration build trigger 1779560264215 -->
