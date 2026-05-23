@@ -17,6 +17,11 @@ import {
   rejectPayment,
   markPaymentAsFraud,
   verifyAutoApproved,
+  fetchAdminNotifications,
+  markNotificationRead,
+  fetchBannedUsers,
+  unbanUser,
+  calculateScore,
   BANK_CONFIG
 } from "./firebase.js";
 import {
@@ -316,10 +321,12 @@ async function saveLesson() {
 async function loadUsers() {
   const c = document.getElementById("users-container");
   try {
-    const [users, allProgress, allPays] = await Promise.all([
+    const [users, allProgress, allPays, notifs, bannedList] = await Promise.all([
       fetchAllUsers(),
       fetchAllProgress(),
-      fetchAllPayments()
+      fetchAllPayments(),
+      fetchAdminNotifications().catch(() => []),
+      fetchBannedUsers().catch(() => [])
     ]);
     // Pending + auto_approved (cần admin verify) — show in same dashboard
     const payments = allPays.filter(p => p.status === "pending" || p.status === "auto_approved");
@@ -376,6 +383,47 @@ async function loadUsers() {
           </tbody>
         </table>
       </div>
+
+      ${notifs.length > 0 ? `
+      <div class="admin-card" style="margin-top:24px;border-color:rgba(239,68,68,0.4)">
+        <div class="admin-card-header">
+          <h2 class="admin-card-title">🚨 Thông báo khẩn <span class="admin-notif-badge">${notifs.length}</span></h2>
+        </div>
+        <div>
+          ${notifs.map(n => `
+            <div class="notif-row">
+              <div class="info">
+                <div><strong>${escapeHtml(n.message)}</strong></div>
+                <div class="meta">Khóa: ${escapeHtml(n.courseTitle || "—")} · Bài: ${escapeHtml(n.lessonTitle || "—")} · ${n.createdAt ? new Date(n.createdAt.seconds * 1000).toLocaleString("vi-VN") : "—"}</div>
+              </div>
+              <button class="btn btn-secondary btn-sm" data-mark-read="${escapeHtml(n.id)}">✓ Đã đọc</button>
+            </div>
+          `).join("")}
+        </div>
+      </div>` : ""}
+
+      ${bannedList.length > 0 ? `
+      <div class="admin-card" style="margin-top:24px;border-color:rgba(239,68,68,0.4)">
+        <div class="admin-card-header">
+          <h2 class="admin-card-title">⛔ User đang bị ban (${bannedList.length})</h2>
+        </div>
+        <div>
+          ${bannedList.map(p => {
+            const u = users.find(x => x.id === p.id) || { displayName: "?", email: p.id };
+            const daysLeft = Math.ceil(((p.bannedUntil || 0) - Date.now()) / 86400000);
+            const until = new Date(p.bannedUntil || 0).toLocaleString("vi-VN");
+            const vCount = (p.violations || []).length;
+            return `
+              <div class="notif-row" style="background:rgba(239,68,68,0.04)">
+                <div class="info">
+                  <div><strong>${escapeHtml(u.displayName || u.email || "—")}</strong> <span style="color:var(--text-mute);font-weight:400">(${escapeHtml(u.email || "")})</span></div>
+                  <div class="meta">Còn ${daysLeft} ngày · Hết hạn: ${until} · Tổng vi phạm: ${vCount}</div>
+                </div>
+                <button class="btn btn-primary btn-sm" data-unban="${escapeHtml(p.id)}">🔓 Gỡ ban</button>
+              </div>`;
+          }).join("")}
+        </div>
+      </div>` : ""}
 
       <div class="admin-card" style="margin-top:24px">
         <div class="admin-card-header">
@@ -525,6 +573,39 @@ async function loadUsers() {
           flashMessage("Lỗi: " + err.message, "error");
           btn.disabled = false;
           btn.textContent = "🔓 Mở lại 24h";
+        }
+      });
+    });
+
+    // Bind mark-read notification buttons
+    c.querySelectorAll('[data-mark-read]').forEach(btn => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        try {
+          await markNotificationRead(btn.dataset.markRead);
+          flashMessage("✓ Đã đánh dấu đã đọc.", "success");
+          await loadUsers();
+        } catch (err) {
+          flashMessage("Lỗi: " + err.message, "error");
+          btn.disabled = false;
+        }
+      });
+    });
+
+    // Bind unban buttons
+    c.querySelectorAll('[data-unban]').forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Gỡ ban user này? Họ sẽ xem được bài ngay lập tức.")) return;
+        btn.disabled = true;
+        btn.textContent = "Đang xử lý...";
+        try {
+          await unbanUser(btn.dataset.unban);
+          flashMessage("✓ Đã gỡ ban.", "success");
+          await loadUsers();
+        } catch (err) {
+          flashMessage("Lỗi: " + err.message, "error");
+          btn.disabled = false;
+          btn.textContent = "🔓 Gỡ ban";
         }
       });
     });
