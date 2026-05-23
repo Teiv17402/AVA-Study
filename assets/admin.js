@@ -28,6 +28,8 @@ import {
   toggleCoupon,
   updateCoupon,
   revokeUserPaidAccess,
+  saveQuizSolutions,
+  fetchQuizSolutions,
   BANK_CONFIG
 } from "./firebase.js";
 import {
@@ -283,7 +285,7 @@ async function saveCourse() {
   }
 }
 
-function openLessonModal(courseId, lessonIdx) {
+async function openLessonModal(courseId, lessonIdx) {
   editingLesson = { courseId, lessonIndex: lessonIdx };
   const course = courses.find(c => c.id === courseId);
   const lessons = (course.lessons || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -299,8 +301,16 @@ function openLessonModal(courseId, lessonIdx) {
   if (vipCheckbox) vipCheckbox.checked = !!(lesson && lesson.isVip);
   if (priceInput) priceInput.value = (lesson && lesson.price) ? lesson.price : "";
 
-  // Render quiz questions
-  const quiz = (lesson && lesson.quiz) || [];
+  // Render quiz questions — merge with solutions from admin-only table
+  let quiz = (lesson && lesson.quiz) || [];
+  if (lesson && lesson.id && quiz.length > 0) {
+    try {
+      const sols = await fetchQuizSolutions(lesson.id);
+      if (sols.length > 0) {
+        quiz = quiz.map((q, i) => ({ ...q, correct: sols[i] !== undefined ? sols[i] : (q.correct || 0) }));
+      }
+    } catch (e) { console.warn("Lỗi load quiz solutions:", e); }
+  }
   renderQuizQuestions(quiz);
 
   document.getElementById("modal-lesson").classList.add("active");
@@ -378,7 +388,11 @@ async function saveLesson() {
   const course = courses.find(c => c.id === editingLesson.courseId);
   const lessons = (course.lessons || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
 
-  const quiz = collectQuizFromForm();
+  const fullQuiz = collectQuizFromForm();
+  // Split: store quiz_public (no correct) in lesson + solutions in admin table
+  const quiz = fullQuiz.map(q => ({ q: q.q, opts: q.opts }));  // strip correct
+  const quizSolutions = fullQuiz.map(q => q.correct);
+  let solutionsLessonId = null;  // remember lesson id to save solutions after
 
   // Validate quiz: each question needs 4 non-empty options
   for (let i = 0; i < quiz.length; i++) {
@@ -400,18 +414,25 @@ async function saveLesson() {
       ...existing,
       title, driveFileId: driveId, duration, description, isVip, price, quiz
     };
+    solutionsLessonId = existing.id;
   } else {
     const newId = "lesson-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7);
     lessons.push({
       id: newId, title, driveFileId: driveId, duration, description,
       isVip, price, quiz, order: lessons.length
     });
+    solutionsLessonId = newId;
   }
 
   lessons.forEach((l, i) => l.order = i);
 
   try {
     await updateCourse(editingLesson.courseId, { lessons });
+    if (solutionsLessonId && quizSolutions.length > 0) {
+      try {
+        await saveQuizSolutions(solutionsLessonId, quizSolutions);
+      } catch (e) { console.warn("Lỗi lưu quiz solutions:", e); }
+    }
     flashMessage("Đã lưu bài học", "success");
     document.getElementById("modal-lesson").classList.remove("active");
     await refreshCourses();
