@@ -1,141 +1,118 @@
 // ============================================
-// FIREBASE INIT + AUTH + FIRESTORE HELPERS
+// SUPABASE BACKEND — drop-in replacement for firebase.js
+// Same export names so other files don't need import changes
 // ============================================
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-import {
-  getAuth,
-  GoogleAuthProvider,
-  signInWithPopup,
-  signOut,
-  onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import {
-  getFirestore,
-  collection,
-  doc,
-  getDoc,
-  setDoc,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyCU9fEVcnrAdq8AT4vSWWKr6IJ9WMQuRXs",
-  authDomain: "ava-study.firebaseapp.com",
-  projectId: "ava-study",
-  storageBucket: "ava-study.firebasestorage.app",
-  messagingSenderId: "729248373415",
-  appId: "1:729248373415:web:1c5f2077f242cd407a1982"
-};
+const SUPABASE_URL = "https://tloemybryfsqimdgbwvs.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_7Gf6atJXyVV1cjriMoHBaQ_-nvZUbNP";
 
-export const ADMIN_EMAILS = [
-  "lehoangviet.17042002@gmail.com"
-];
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+});
 
-// ============================================
-// BANK CONFIG — DEMO DATA (admin sửa lại sau)
-// ============================================
+// Aliases for backward compat
+export const auth = supabase.auth;
+export const db = supabase;
+export const googleProvider = null;
+
+export const ADMIN_EMAILS = ["lehoangviet.17042002@gmail.com"];
+
 export const BANK_CONFIG = {
-  bankCode: "MB",            // Mã ngân hàng VietQR (xem https://api.vietqr.io/v2/banks)
+  bankCode: "MB",
   bankName: "MB Bank",
   accountNo: "0123456789",
   accountName: "NGUYEN VAN DEMO",
-  defaultPrice: 99000        // Giá mặc định 1 bài VIP (VNĐ)
+  defaultPrice: 99000
 };
 
-/** Tạo URL ảnh VietQR */
+export const VIOLATION_BAN_DAYS = [7, 30];
+
 export function buildVietQrUrl(amount, content) {
-  const params = new URLSearchParams({
-    amount: amount,
-    addInfo: content,
-    accountName: BANK_CONFIG.accountName
-  });
+  const params = new URLSearchParams({ amount, addInfo: content, accountName: BANK_CONFIG.accountName });
   return `https://img.vietqr.io/image/${BANK_CONFIG.bankCode}-${BANK_CONFIG.accountNo}-compact2.png?${params}`;
 }
 
-/** Tạo nội dung chuyển khoản unique */
 export function buildTransferContent(userId, lessonId) {
-  const u = userId.slice(0, 6).toUpperCase();
-  const l = lessonId.slice(-5).toUpperCase();
-  return `AVA${u}${l}`;
+  return `AVA${userId.slice(0,6).toUpperCase()}${lessonId.slice(-5).toUpperCase()}`;
 }
 
-/** Tạo nội dung chuyển khoản unique cho khóa */
 export function buildCourseTransferContent(userId, courseId) {
-  const u = userId.slice(0, 6).toUpperCase();
-  const c = courseId.slice(-5).toUpperCase();
-  return `AVAK${u}${c}`;
+  return `AVAK${userId.slice(0,6).toUpperCase()}${courseId.slice(-5).toUpperCase()}`;
 }
-
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const googleProvider = new GoogleAuthProvider();
-
-export {
-  signInWithPopup,
-  signOut,
-  onAuthStateChanged,
-  collection,
-  doc,
-  getDoc,
-  setDoc,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  serverTimestamp
-};
 
 export function isAdmin(user) {
-  return !!user && ADMIN_EMAILS.includes(user.email);
+  if (!user) return false;
+  const email = user.email || (user.user && user.user.email);
+  return ADMIN_EMAILS.includes(email);
+}
+
+// ============================================
+// AUTH (replaces Firebase Auth functions)
+// ============================================
+function normalizeUser(supabaseUser) {
+  if (!supabaseUser) return null;
+  return {
+    uid: supabaseUser.id,
+    id: supabaseUser.id,
+    email: supabaseUser.email,
+    displayName: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || supabaseUser.email,
+    photoURL: supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || ''
+  };
+}
+
+export async function signInWithGoogle() {
+  const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+  const redirectTo = base + 'home.html';
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo }
+  });
+  if (error) throw error;
+  return data;
+}
+
+// Compatibility shim for signInWithPopup(auth, googleProvider) → redirect flow
+export function signInWithPopup() { return signInWithGoogle(); }
+export function signOut() { return supabase.auth.signOut(); }
+
+export function onAuthStateChanged(_authParam, callback) {
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    callback(session ? normalizeUser(session.user) : null);
+  });
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    callback(session ? normalizeUser(session.user) : null);
+  });
+  return () => subscription.unsubscribe();
 }
 
 export async function ensureUserDoc(user) {
   if (!user) return;
-  const userRef = doc(db, "users", user.uid);
-  const snap = await getDoc(userRef);
-  if (!snap.exists()) {
-    await setDoc(userRef, {
+  const role = isAdmin(user) ? 'admin' : 'user';
+  const { error } = await supabase
+    .from('user_progress')
+    .upsert({
+      user_id: user.uid,
       email: user.email,
-      displayName: user.displayName || user.email,
-      photoURL: user.photoURL || "",
-      role: isAdmin(user) ? "admin" : "user",
-      createdAt: serverTimestamp(),
-      lastLogin: serverTimestamp()
-    });
-  } else {
-    await updateDoc(userRef, {
-      lastLogin: serverTimestamp(),
-      role: isAdmin(user) ? "admin" : (snap.data().role || "user")
-    });
-  }
+      display_name: user.displayName || user.email,
+      photo_url: user.photoURL || '',
+      role,
+      last_login: new Date().toISOString()
+    }, { onConflict: 'user_id' });
+  if (error) console.warn('ensureUserDoc:', error);
 }
 
 export function waitForAuth() {
   return new Promise((resolve) => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      unsub();
-      resolve(user);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      resolve(session ? normalizeUser(session.user) : null);
     });
   });
 }
 
 export async function requireAuth() {
   const user = await waitForAuth();
-  if (!user) {
-    location.href = "index.html";
-    return null;
-  }
+  if (!user) { location.href = "index.html"; return null; }
   await ensureUserDoc(user);
   return user;
 }
@@ -152,514 +129,436 @@ export async function requireAdmin() {
 }
 
 export async function logout() {
-  await signOut(auth);
+  await supabase.auth.signOut();
   location.href = "index.html";
 }
 
-export async function fetchCourses() {
-  const q = query(collection(db, "courses"), orderBy("order", "asc"));
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-}
-
-export async function fetchCourse(courseId) {
-  const snap = await getDoc(doc(db, "courses", courseId));
-  if (!snap.exists()) return null;
-  return { id: snap.id, ...snap.data() };
-}
-
-export async function createCourse(data) {
-  const courses = await fetchCourses();
-  const maxOrder = courses.reduce((m, c) => Math.max(m, c.order || 0), 0);
-  const ref = await addDoc(collection(db, "courses"), {
-    title: data.title || "Khóa học mới",
-    description: data.description || "",
-    level: data.level || "Cơ bản",
-    thumbnail: data.thumbnail || "",
-    lessons: data.lessons || [],
-    order: maxOrder + 1,
-    isVip: !!data.isVip,
-    price: data.price || 0,
-    createdAt: serverTimestamp()
-  });
-  return ref.id;
-}
-
-export async function updateCourse(courseId, data) {
-  await updateDoc(doc(db, "courses", courseId), data);
-}
-
-export async function deleteCourse(courseId) {
-  await deleteDoc(doc(db, "courses", courseId));
-}
-
-export async function fetchUserProgress(userId) {
-  const snap = await getDoc(doc(db, "userProgress", userId));
-  if (!snap.exists()) return { completed: [], unlockedAt: {}, paidLessons: [], paidCourses: [], quizScores: {}, quizAttempts: {} };
-  const data = snap.data();
+// ============================================
+// COURSES
+// ============================================
+function dbToFrontCourse(row) {
+  if (!row) return null;
   return {
-    completed: data.completed || [],
-    unlockedAt: data.unlockedAt || {},
-    paidLessons: data.paidLessons || [],
-    paidCourses: data.paidCourses || [],
-    quizScores: data.quizScores || {},
-    quizAttempts: data.quizAttempts || {},
-    violations: data.violations || [],
-    bannedUntil: data.bannedUntil || 0,
-    lastUpdate: data.lastUpdate
+    id: row.id, title: row.title, description: row.description,
+    level: row.level, thumbnail: row.thumbnail,
+    lessons: row.lessons || [], order: row.display_order,
+    isVip: row.is_vip, price: row.price,
+    createdAt: row.created_at
   };
 }
 
+export async function fetchCourses() {
+  const { data, error } = await supabase
+    .from('courses').select('*').order('display_order', { ascending: true });
+  if (error) throw error;
+  return (data || []).map(dbToFrontCourse);
+}
+
+export async function fetchCourse(courseId) {
+  const { data, error } = await supabase
+    .from('courses').select('*').eq('id', courseId).maybeSingle();
+  if (error) throw error;
+  return dbToFrontCourse(data);
+}
+
+export async function createCourse(data) {
+  const all = await fetchCourses();
+  const maxOrder = all.reduce((m, c) => Math.max(m, c.order || 0), 0);
+  const { data: inserted, error } = await supabase
+    .from('courses')
+    .insert([{
+      title: data.title || 'Khóa học mới',
+      description: data.description || '',
+      level: data.level || 'Cơ bản',
+      thumbnail: data.thumbnail || '',
+      lessons: data.lessons || [],
+      display_order: maxOrder + 1,
+      is_vip: !!data.isVip,
+      price: data.price || 0
+    }])
+    .select('id').single();
+  if (error) throw error;
+  return inserted.id;
+}
+
+export async function updateCourse(courseId, data) {
+  const patch = {};
+  if (data.title !== undefined) patch.title = data.title;
+  if (data.description !== undefined) patch.description = data.description;
+  if (data.level !== undefined) patch.level = data.level;
+  if (data.thumbnail !== undefined) patch.thumbnail = data.thumbnail;
+  if (data.lessons !== undefined) patch.lessons = data.lessons;
+  if (data.order !== undefined) patch.display_order = data.order;
+  if (data.isVip !== undefined) patch.is_vip = data.isVip;
+  if (data.price !== undefined) patch.price = data.price;
+  const { error } = await supabase.from('courses').update(patch).eq('id', courseId);
+  if (error) throw error;
+}
+
+export async function deleteCourse(courseId) {
+  const { error } = await supabase.from('courses').delete().eq('id', courseId);
+  if (error) throw error;
+}
+
+// ============================================
+// USER PROGRESS
+// ============================================
+function dbToFrontProgress(row) {
+  if (!row) return {
+    completed: [], unlockedAt: {}, paidLessons: [], paidCourses: [],
+    quizScores: {}, quizAttempts: {}, violations: [], bannedUntil: 0
+  };
+  return {
+    completed: row.completed || [],
+    unlockedAt: row.unlocked_at || {},
+    paidLessons: row.paid_lessons || [],
+    paidCourses: row.paid_courses || [],
+    quizScores: row.quiz_scores || {},
+    quizAttempts: row.quiz_attempts || {},
+    violations: row.violations || [],
+    bannedUntil: row.banned_until || 0,
+    lastUpdate: row.last_update
+  };
+}
+
+export async function fetchUserProgress(userId) {
+  const { data, error } = await supabase
+    .from('user_progress').select('*').eq('user_id', userId).maybeSingle();
+  if (error) throw error;
+  return dbToFrontProgress(data);
+}
+
 export async function markLessonCompleted(userId, lessonId, nextLessonId) {
-  const ref = doc(db, "userProgress", userId);
-  const snap = await getDoc(ref);
-  const data = snap.exists() ? snap.data() : {};
-  const completed = data.completed || [];
-  const unlockedAt = data.unlockedAt || {};
-
-  if (!completed.includes(lessonId)) {
-    completed.push(lessonId);
-  }
-  if (nextLessonId && !unlockedAt[nextLessonId]) {
-    unlockedAt[nextLessonId] = Date.now();
-  }
-
-  await setDoc(ref, {
-    completed,
-    unlockedAt,
-    lastUpdate: serverTimestamp()
-  }, { merge: true });
-
+  const cur = await fetchUserProgress(userId);
+  const completed = cur.completed.slice();
+  const unlockedAt = { ...cur.unlockedAt };
+  if (!completed.includes(lessonId)) completed.push(lessonId);
+  if (nextLessonId && !unlockedAt[nextLessonId]) unlockedAt[nextLessonId] = Date.now();
+  const { error } = await supabase.from('user_progress').update({
+    completed, unlocked_at: unlockedAt,
+    last_update: new Date().toISOString()
+  }).eq('user_id', userId);
+  if (error) throw error;
   return { completed, unlockedAt };
 }
 
 export async function ensureFirstUnlock(userId, firstLessonId) {
   if (!firstLessonId) return null;
-  const ref = doc(db, "userProgress", userId);
-  const snap = await getDoc(ref);
-  const data = snap.exists() ? snap.data() : {};
-  const completed = data.completed || [];
-  const unlockedAt = data.unlockedAt || {};
-
-  if (completed.includes(firstLessonId)) return null;
-  if (unlockedAt[firstLessonId]) return null;
-
-  unlockedAt[firstLessonId] = Date.now();
-  await setDoc(ref, {
-    completed,
-    unlockedAt,
-    lastUpdate: serverTimestamp()
-  }, { merge: true });
-  return { completed, unlockedAt };
+  const cur = await fetchUserProgress(userId);
+  if (cur.completed.includes(firstLessonId)) return null;
+  if (cur.unlockedAt[firstLessonId]) return null;
+  const unlockedAt = { ...cur.unlockedAt, [firstLessonId]: Date.now() };
+  const { error } = await supabase.from('user_progress').update({
+    unlocked_at: unlockedAt, last_update: new Date().toISOString()
+  }).eq('user_id', userId);
+  if (error) throw error;
+  return { completed: cur.completed, unlockedAt };
 }
 
 export async function adminResetLessonTimer(userId, lessonId) {
-  const ref = doc(db, "userProgress", userId);
-  const snap = await getDoc(ref);
-  const data = snap.exists() ? snap.data() : {};
-  const unlockedAt = data.unlockedAt || {};
-  unlockedAt[lessonId] = Date.now();
-  await setDoc(ref, {
-    unlockedAt,
-    lastUpdate: serverTimestamp()
-  }, { merge: true });
+  const cur = await fetchUserProgress(userId);
+  const unlockedAt = { ...cur.unlockedAt, [lessonId]: Date.now() };
+  const { error } = await supabase.from('user_progress').update({
+    unlocked_at: unlockedAt, last_update: new Date().toISOString()
+  }).eq('user_id', userId);
+  if (error) throw error;
   return unlockedAt;
 }
 
 export async function resetUserProgress(userId) {
-  await setDoc(doc(db, "userProgress", userId), {
-    completed: [],
-    unlockedAt: {},
-    paidLessons: [],
-    lastUpdate: serverTimestamp()
-  });
+  const { error } = await supabase.from('user_progress').update({
+    completed: [], unlocked_at: {}, paid_lessons: [], paid_courses: [],
+    last_update: new Date().toISOString()
+  }).eq('user_id', userId);
+  if (error) throw error;
 }
 
 export async function fetchAllUsers() {
-  const snap = await getDocs(collection(db, "users"));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const { data, error } = await supabase
+    .from('user_progress')
+    .select('user_id, email, display_name, photo_url, role, last_login');
+  if (error) throw error;
+  return (data || []).map(u => ({
+    id: u.user_id,
+    email: u.email,
+    displayName: u.display_name,
+    photoURL: u.photo_url,
+    role: u.role,
+    lastLogin: u.last_login ? { seconds: Math.floor(new Date(u.last_login).getTime() / 1000) } : null
+  }));
 }
 
 export async function fetchAllProgress() {
-  const snap = await getDocs(collection(db, "userProgress"));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const { data, error } = await supabase.from('user_progress').select('*');
+  if (error) throw error;
+  return (data || []).map(row => ({
+    id: row.user_id,
+    completed: row.completed || [],
+    unlockedAt: row.unlocked_at || {},
+    paidLessons: row.paid_lessons || [],
+    paidCourses: row.paid_courses || [],
+    quizScores: row.quiz_scores || {},
+    quizAttempts: row.quiz_attempts || {},
+    violations: row.violations || [],
+    bannedUntil: row.banned_until || 0
+  }));
 }
 
 // ============================================
-// PAYMENT HELPERS
+// PAYMENTS
 // ============================================
+function dbToFrontPayment(row) {
+  if (!row) return null;
+  return {
+    id: row.id, userId: row.user_id, userEmail: row.user_email,
+    type: row.type, lessonId: row.lesson_id, courseId: row.course_id,
+    courseTitle: row.course_title, lessonTitle: row.lesson_title,
+    amount: row.amount, transferContent: row.transfer_content,
+    status: row.status,
+    createdAt: row.created_at ? { seconds: Math.floor(new Date(row.created_at).getTime() / 1000) } : null,
+    approvedAt: row.approved_at ? { seconds: Math.floor(new Date(row.approved_at).getTime() / 1000) } : null
+  };
+}
 
-/** User tạo yêu cầu thanh toán (status: pending) */
 export async function createPayment(userId, userEmail, lessonId, courseId, courseTitle, lessonTitle, amount) {
   const transferContent = buildTransferContent(userId, lessonId);
-
-  // Kiểm tra đã có pending payment cho bài này chưa
-  const existing = await getDocs(query(
-    collection(db, "payments"),
-    where("userId", "==", userId),
-    where("lessonId", "==", lessonId),
-    where("status", "==", "pending")
-  ));
-  if (!existing.empty) {
-    // Đã có pending — trả lại payment đó
-    const d = existing.docs[0];
-    return { id: d.id, ...d.data() };
-  }
-
-  const ref = await addDoc(collection(db, "payments"), {
-    userId,
-    userEmail: userEmail || "",
-    type: "lesson",
-    lessonId,
-    courseId,
-    courseTitle: courseTitle || "",
-    lessonTitle: lessonTitle || "",
-    amount,
-    transferContent,
-    status: "pending",
-    createdAt: serverTimestamp()
-  });
-  return {
-    id: ref.id,
-    userId,
-    type: "lesson",
-    lessonId,
-    courseId,
-    amount,
-    transferContent,
-    status: "pending"
-  };
+  const { data: existing } = await supabase
+    .from('payments').select('*')
+    .eq('user_id', userId).eq('lesson_id', lessonId).eq('status', 'pending');
+  if (existing && existing.length > 0) return dbToFrontPayment(existing[0]);
+  const { data, error } = await supabase.from('payments').insert([{
+    user_id: userId, user_email: userEmail || '',
+    type: 'lesson', lesson_id: lessonId, course_id: courseId,
+    course_title: courseTitle || '', lesson_title: lessonTitle || '',
+    amount, transfer_content: transferContent, status: 'pending'
+  }]).select('*').single();
+  if (error) throw error;
+  return dbToFrontPayment(data);
 }
 
-/** User tạo yêu cầu thanh toán cho cả KHÓA (status: pending) */
+export async function fetchMyPaymentForLesson(userId, lessonId) {
+  const { data } = await supabase.from('payments').select('*')
+    .eq('user_id', userId).eq('lesson_id', lessonId)
+    .order('created_at', { ascending: false }).limit(1);
+  return data && data.length ? dbToFrontPayment(data[0]) : null;
+}
+
 export async function createCoursePayment(userId, userEmail, courseId, courseTitle, amount) {
   const transferContent = buildCourseTransferContent(userId, courseId);
-  const existing = await getDocs(query(
-    collection(db, "payments"),
-    where("userId", "==", userId),
-    where("courseId", "==", courseId),
-    where("type", "==", "course"),
-    where("status", "==", "pending")
-  ));
-  if (!existing.empty) {
-    const d = existing.docs[0];
-    return { id: d.id, ...d.data() };
-  }
-  const ref = await addDoc(collection(db, "payments"), {
-    userId,
-    userEmail: userEmail || "",
-    type: "course",
-    lessonId: "",
-    courseId,
-    courseTitle: courseTitle || "",
-    lessonTitle: "",
-    amount,
-    transferContent,
-    status: "pending",
-    createdAt: serverTimestamp()
-  });
-  return {
-    id: ref.id,
-    userId,
-    type: "course",
-    courseId,
-    amount,
-    transferContent,
-    status: "pending"
-  };
+  const { data: existing } = await supabase.from('payments').select('*')
+    .eq('user_id', userId).eq('course_id', courseId).eq('type', 'course').eq('status', 'pending');
+  if (existing && existing.length > 0) return dbToFrontPayment(existing[0]);
+  const { data, error } = await supabase.from('payments').insert([{
+    user_id: userId, user_email: userEmail || '',
+    type: 'course', lesson_id: '', course_id: courseId,
+    course_title: courseTitle || '', lesson_title: '',
+    amount, transfer_content: transferContent, status: 'pending'
+  }]).select('*').single();
+  if (error) throw error;
+  return dbToFrontPayment(data);
 }
 
-/** User check trạng thái thanh toán cho 1 khóa */
 export async function fetchMyPaymentForCourse(userId, courseId) {
-  const snap = await getDocs(query(
-    collection(db, "payments"),
-    where("userId", "==", userId),
-    where("courseId", "==", courseId),
-    where("type", "==", "course")
-  ));
-  if (snap.empty) return null;
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  return items[0];
+  const { data } = await supabase.from('payments').select('*')
+    .eq('user_id', userId).eq('course_id', courseId).eq('type', 'course')
+    .order('created_at', { ascending: false }).limit(1);
+  return data && data.length ? dbToFrontPayment(data[0]) : null;
 }
 
-/** User check trạng thái thanh toán cho 1 bài */
-export async function fetchMyPaymentForLesson(userId, lessonId) {
-  const snap = await getDocs(query(
-    collection(db, "payments"),
-    where("userId", "==", userId),
-    where("lessonId", "==", lessonId)
-  ));
-  if (snap.empty) return null;
-  // Lấy cái mới nhất
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  return items[0];
-}
-
-/** Admin lấy list tất cả payment pending */
 export async function fetchPendingPayments() {
-  const snap = await getDocs(query(
-    collection(db, "payments"),
-    where("status", "==", "pending")
-  ));
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  return items;
+  const { data, error } = await supabase.from('payments').select('*')
+    .eq('status', 'pending').order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(dbToFrontPayment);
 }
 
-/** Admin lấy TẤT CẢ payments (mọi status) — cho tab Lịch sử */
 export async function fetchAllPayments() {
-  const snap = await getDocs(collection(db, "payments"));
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  return items;
+  const { data, error } = await supabase.from('payments').select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(dbToFrontPayment);
 }
 
-/** Admin duyệt payment → thêm lesson vào paidLessons của user */
 export async function approvePayment(paymentId, userId, lessonId, adminUid) {
-  // Update payment status
-  await updateDoc(doc(db, "payments", paymentId), {
-    status: "approved",
-    approvedAt: serverTimestamp(),
-    approvedBy: adminUid
-  });
-
-  // Add lessonId vào paidLessons của user
-  const progRef = doc(db, "userProgress", userId);
-  const snap = await getDoc(progRef);
-  const data = snap.exists() ? snap.data() : {};
-  const paidLessons = data.paidLessons || [];
-  if (!paidLessons.includes(lessonId)) {
-    paidLessons.push(lessonId);
-  }
-  await setDoc(progRef, {
-    paidLessons,
-    lastUpdate: serverTimestamp()
-  }, { merge: true });
-}
-
-/** Admin duyệt payment KHÓA → thêm courseId vào paidCourses của user */
-export async function approveCoursePayment(paymentId, userId, courseId, adminUid) {
-  await updateDoc(doc(db, "payments", paymentId), {
-    status: "approved",
-    approvedAt: serverTimestamp(),
-    approvedBy: adminUid
-  });
-  const progRef = doc(db, "userProgress", userId);
-  const snap = await getDoc(progRef);
-  const data = snap.exists() ? snap.data() : {};
-  const paidCourses = data.paidCourses || [];
-  if (!paidCourses.includes(courseId)) {
-    paidCourses.push(courseId);
-  }
-  await setDoc(progRef, {
-    paidCourses,
-    lastUpdate: serverTimestamp()
-  }, { merge: true });
-}
-
-/** Admin từ chối payment */
-export async function rejectPayment(paymentId, adminUid) {
-  await updateDoc(doc(db, "payments", paymentId), {
-    status: "rejected",
-    approvedAt: serverTimestamp(),
-    approvedBy: adminUid
-  });
-}
-
-/** USER tự auto-duyệt bài VIP — gọi khi user bấm "Tôi đã thanh toán" */
-export async function selfApprovePayment(paymentId, userId, lessonId) {
-  await updateDoc(doc(db, "payments", paymentId), {
-    status: "auto_approved",
-    autoApprovedAt: serverTimestamp()
-  });
-  const progRef = doc(db, "userProgress", userId);
-  const snap = await getDoc(progRef);
-  const data = snap.exists() ? snap.data() : {};
-  const paidLessons = data.paidLessons || [];
+  await supabase.from('payments').update({
+    status: 'approved', approved_at: new Date().toISOString(), approved_by: adminUid
+  }).eq('id', paymentId);
+  const cur = await fetchUserProgress(userId);
+  const paidLessons = cur.paidLessons.slice();
   if (!paidLessons.includes(lessonId)) paidLessons.push(lessonId);
-  await setDoc(progRef, {
-    paidLessons,
-    lastUpdate: serverTimestamp()
-  }, { merge: true });
+  await supabase.from('user_progress').update({
+    paid_lessons: paidLessons, last_update: new Date().toISOString()
+  }).eq('user_id', userId);
 }
 
-/** USER tự auto-duyệt cả KHÓA */
-export async function selfApproveCoursePayment(paymentId, userId, courseId) {
-  await updateDoc(doc(db, "payments", paymentId), {
-    status: "auto_approved",
-    autoApprovedAt: serverTimestamp()
-  });
-  const progRef = doc(db, "userProgress", userId);
-  const snap = await getDoc(progRef);
-  const data = snap.exists() ? snap.data() : {};
-  const paidCourses = data.paidCourses || [];
+export async function approveCoursePayment(paymentId, userId, courseId, adminUid) {
+  await supabase.from('payments').update({
+    status: 'approved', approved_at: new Date().toISOString(), approved_by: adminUid
+  }).eq('id', paymentId);
+  const cur = await fetchUserProgress(userId);
+  const paidCourses = cur.paidCourses.slice();
   if (!paidCourses.includes(courseId)) paidCourses.push(courseId);
-  await setDoc(progRef, {
-    paidCourses,
-    lastUpdate: serverTimestamp()
-  }, { merge: true });
+  await supabase.from('user_progress').update({
+    paid_courses: paidCourses, last_update: new Date().toISOString()
+  }).eq('user_id', userId);
 }
 
-/** ADMIN báo gian lận: revoke quyền + đổi status fraud */
+export async function rejectPayment(paymentId, adminUid) {
+  await supabase.from('payments').update({
+    status: 'rejected', approved_at: new Date().toISOString(), approved_by: adminUid
+  }).eq('id', paymentId);
+}
+
+export async function selfApprovePayment() { throw new Error('Self-approve đã tắt — chờ admin duyệt'); }
+export async function selfApproveCoursePayment() { throw new Error('Self-approve đã tắt — chờ admin duyệt'); }
+
 export async function markPaymentAsFraud(paymentId, userId, lessonId, courseId, type, adminUid) {
-  await updateDoc(doc(db, "payments", paymentId), {
-    status: "fraud",
-    fraudAt: serverTimestamp(),
-    fraudBy: adminUid
-  });
-  const progRef = doc(db, "userProgress", userId);
-  const snap = await getDoc(progRef);
-  const data = snap.exists() ? snap.data() : {};
-  if (type === "course" && courseId) {
-    const paidCourses = (data.paidCourses || []).filter(id => id !== courseId);
-    await setDoc(progRef, { paidCourses, lastUpdate: serverTimestamp() }, { merge: true });
+  await supabase.from('payments').update({
+    status: 'fraud', fraud_at: new Date().toISOString(), fraud_by: adminUid
+  }).eq('id', paymentId);
+  const cur = await fetchUserProgress(userId);
+  const patch = { last_update: new Date().toISOString() };
+  if (type === 'course' && courseId) {
+    patch.paid_courses = cur.paidCourses.filter(id => id !== courseId);
   } else if (lessonId) {
-    const paidLessons = (data.paidLessons || []).filter(id => id !== lessonId);
-    await setDoc(progRef, { paidLessons, lastUpdate: serverTimestamp() }, { merge: true });
+    patch.paid_lessons = cur.paidLessons.filter(id => id !== lessonId);
   }
+  await supabase.from('user_progress').update(patch).eq('user_id', userId);
 }
 
-/** ADMIN verify auto-approved payment (sau khi đối chiếu với sao kê) */
 export async function verifyAutoApproved(paymentId, adminUid) {
-  await updateDoc(doc(db, "payments", paymentId), {
-    status: "approved",
-    approvedAt: serverTimestamp(),
-    approvedBy: adminUid
-  });
+  await supabase.from('payments').update({
+    status: 'approved', approved_at: new Date().toISOString(), approved_by: adminUid
+  }).eq('id', paymentId);
 }
 
 // ============================================
-// F3: VIOLATION SYSTEM (vi phạm timer 24h)
+// VIOLATIONS + NOTIFICATIONS
 // ============================================
-export const VIOLATION_BAN_DAYS = [7, 30]; // L1: 7d, L2: 30d, L3: notify admin
-
-/** Tự động ghi nhận vi phạm khi user load bài và bị expired */
 export async function recordViolation(userId, userEmail, userName, courseId, courseTitle, lessonId, lessonTitle) {
-  const progRef = doc(db, "userProgress", userId);
-  const snap = await getDoc(progRef);
-  const data = snap.exists() ? snap.data() : {};
-  const violations = data.violations || [];
+  const cur = await fetchUserProgress(userId);
+  const violations = cur.violations.slice();
   const alreadyRecorded = violations.some(v => v.lessonId === lessonId);
-  if (alreadyRecorded) return { count: violations.length, banUntil: data.bannedUntil || 0, alreadyRecorded: true };
+  if (alreadyRecorded) return { count: violations.length, banUntil: cur.bannedUntil, alreadyRecorded: true };
 
-  violations.push({
-    at: Date.now(),
-    courseId, courseTitle, lessonId, lessonTitle
-  });
+  violations.push({ at: Date.now(), courseId, courseTitle, lessonId, lessonTitle });
   const count = violations.length;
-
-  let bannedUntil = data.bannedUntil || 0;
+  let bannedUntil = cur.bannedUntil || 0;
   const now = Date.now();
   if (count === 1) bannedUntil = now + VIOLATION_BAN_DAYS[0] * 24 * 60 * 60 * 1000;
   else if (count === 2) bannedUntil = now + VIOLATION_BAN_DAYS[1] * 24 * 60 * 60 * 1000;
 
-  await setDoc(progRef, {
-    violations, bannedUntil, lastUpdate: serverTimestamp()
-  }, { merge: true });
+  await supabase.from('user_progress').update({
+    violations, banned_until: bannedUntil, last_update: new Date().toISOString()
+  }).eq('user_id', userId);
 
-  // Lần ≥3: tạo notification cho admin
   if (count >= 3) {
-    await addDoc(collection(db, "adminNotifications"), {
-      type: "repeat_violator",
-      severity: "high",
-      userId, userEmail, userName,
-      courseId, courseTitle, lessonId, lessonTitle,
-      violationCount: count,
+    await supabase.from('admin_notifications').insert([{
+      type: 'repeat_violator', severity: 'high',
+      user_id: userId, user_email: userEmail, user_name: userName,
+      course_id: courseId, course_title: courseTitle,
+      lesson_id: lessonId, lesson_title: lessonTitle,
+      violation_count: count,
       message: `User ${userName || userEmail} đã vi phạm ${count} lần. Cần nhắc trên cộng đồng.`,
-      read: false,
-      createdAt: serverTimestamp()
-    });
+      read: false
+    }]);
   }
-
   return { count, bannedUntil, alreadyRecorded: false };
 }
 
-/** Check user bị ban chưa */
 export function checkBanned(progress) {
   const bannedUntil = (progress && progress.bannedUntil) || 0;
   if (bannedUntil > Date.now()) {
     return {
-      isBanned: true,
-      until: bannedUntil,
-      daysLeft: Math.ceil((bannedUntil - Date.now()) / (24 * 60 * 60 * 1000))
+      isBanned: true, until: bannedUntil,
+      daysLeft: Math.ceil((bannedUntil - Date.now()) / (24*60*60*1000))
     };
   }
   return { isBanned: false };
 }
 
-/** Admin: lấy list user bị ban */
 export async function fetchBannedUsers() {
-  const snap = await getDocs(collection(db, "userProgress"));
   const now = Date.now();
-  return snap.docs
-    .map(d => ({ id: d.id, ...d.data() }))
-    .filter(p => (p.bannedUntil || 0) > now);
+  const { data, error } = await supabase
+    .from('user_progress').select('*').gt('banned_until', now);
+  if (error) throw error;
+  return (data || []).map(row => ({
+    id: row.user_id,
+    completed: row.completed,
+    paidLessons: row.paid_lessons,
+    paidCourses: row.paid_courses,
+    violations: row.violations || [],
+    bannedUntil: row.banned_until
+  }));
 }
 
-/** Admin: lấy notifications chưa đọc */
 export async function fetchAdminNotifications() {
-  const snap = await getDocs(query(collection(db, "adminNotifications"), where("read", "==", false)));
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  return items;
+  const { data, error } = await supabase
+    .from('admin_notifications').select('*').eq('read', false)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(n => ({
+    id: n.id, type: n.type, severity: n.severity,
+    userId: n.user_id, userEmail: n.user_email, userName: n.user_name,
+    courseId: n.course_id, courseTitle: n.course_title,
+    lessonId: n.lesson_id, lessonTitle: n.lesson_title,
+    violationCount: n.violation_count, message: n.message, read: n.read,
+    createdAt: n.created_at ? { seconds: Math.floor(new Date(n.created_at).getTime()/1000) } : null
+  }));
 }
 
-/** Admin: mark notification đã đọc */
 export async function markNotificationRead(notifId) {
-  await updateDoc(doc(db, "adminNotifications", notifId), { read: true, readAt: serverTimestamp() });
+  await supabase.from('admin_notifications')
+    .update({ read: true, read_at: new Date().toISOString() })
+    .eq('id', notifId);
 }
 
-/** Admin: gỡ ban thủ công */
 export async function unbanUser(userId) {
-  await setDoc(doc(db, "userProgress", userId), {
-    bannedUntil: 0,
-    lastUpdate: serverTimestamp()
-  }, { merge: true });
+  await supabase.from('user_progress')
+    .update({ banned_until: 0, last_update: new Date().toISOString() })
+    .eq('user_id', userId);
 }
 
 // ============================================
-// F6: LEADERBOARD / SCORING
+// QUIZ
 // ============================================
-/** Tính điểm 1 user từ progress + courses */
+export async function saveQuizScore(userId, lessonId, score) {
+  const cur = await fetchUserProgress(userId);
+  const quizScores = { ...cur.quizScores };
+  const quizAttempts = { ...cur.quizAttempts };
+  if (!quizScores[lessonId] || score > quizScores[lessonId]) quizScores[lessonId] = score;
+  quizAttempts[lessonId] = (quizAttempts[lessonId] || 0) + 1;
+  await supabase.from('user_progress').update({
+    quiz_scores: quizScores, quiz_attempts: quizAttempts,
+    last_update: new Date().toISOString()
+  }).eq('user_id', userId);
+  return { score, bestScore: quizScores[lessonId], attempts: quizAttempts[lessonId] };
+}
+
+// ============================================
+// SCORE + LEADERBOARD
+// ============================================
 export function calculateScore(progress, courses) {
   if (!progress) return { total: 0, monthly: 0, breakdown: {} };
   const completed = progress.completed || [];
-  const paidCourses = progress.paidCourses || [];
   const violations = progress.violations || [];
   const quizScores = progress.quizScores || {};
-
-  let score = 0;
-  let monthlyScore = 0;
+  let score = 0, monthlyScore = 0;
   const now = new Date();
   const startMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-
-  // 10 điểm / bài hoàn thành
   score += completed.length * 10;
-
-  // 100 điểm / khóa hoàn thành (mọi bài trong khóa đều completed)
   const courseDone = courses.filter(c => {
     const ids = (c.lessons || []).map(l => l.id);
     return ids.length > 0 && ids.every(id => completed.includes(id));
   });
   score += courseDone.length * 100;
-
-  // Quiz bonus: +20 nếu quiz score ≥95%
-  Object.values(quizScores).forEach(s => {
-    if (s >= 95) score += 20;
-  });
-
-  // Penalty -10 mỗi vi phạm
+  Object.values(quizScores).forEach(s => { if (s >= 95) score += 20; });
   score -= violations.length * 10;
-
-  // Monthly: only count completions in current month (best-effort via unlockedAt timestamps)
   const monthCompletions = completed.filter(id => {
     const u = (progress.unlockedAt || {})[id];
     return u && u >= startMonth;
   });
   monthlyScore = monthCompletions.length * 10 - violations.filter(v => v.at >= startMonth).length * 10;
-
   return {
     total: Math.max(0, score),
     monthly: Math.max(0, monthlyScore),
@@ -672,167 +571,120 @@ export function calculateScore(progress, courses) {
   };
 }
 
-/** Lấy leaderboard — return [{user, progress, score}] sorted by total */
 export async function fetchLeaderboard(courses) {
-  const [usersSnap, progSnap] = await Promise.all([
-    getDocs(collection(db, "users")),
-    getDocs(collection(db, "userProgress"))
-  ]);
-  const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  const progMap = {};
-  progSnap.docs.forEach(d => { progMap[d.id] = d.data(); });
-
-  return users
-    .filter(u => u.role !== "admin")
-    .map(u => {
-      const prog = progMap[u.id];
-      const score = calculateScore(prog, courses);
-      return { user: u, progress: prog, score };
+  const { data, error } = await supabase.from('user_progress').select('*');
+  if (error) throw error;
+  return (data || [])
+    .filter(p => p.role !== 'admin')
+    .map(row => {
+      const user = {
+        id: row.user_id, email: row.email,
+        displayName: row.display_name, photoURL: row.photo_url, role: row.role
+      };
+      const progress = dbToFrontProgress(row);
+      const score = calculateScore(progress, courses);
+      return { user, progress, score };
     })
     .sort((a, b) => b.score.total - a.score.total);
 }
 
-
-/** Lưu điểm quiz tốt nhất cho 1 bài + tăng attempts */
-export async function saveQuizScore(userId, lessonId, score) {
-  const ref = doc(db, "userProgress", userId);
-  const snap = await getDoc(ref);
-  const data = snap.exists() ? snap.data() : {};
-  const quizScores = data.quizScores || {};
-  const quizAttempts = data.quizAttempts || {};
-  // Chỉ lưu nếu score cao hơn lần trước
-  if (!quizScores[lessonId] || score > quizScores[lessonId]) {
-    quizScores[lessonId] = score;
-  }
-  quizAttempts[lessonId] = (quizAttempts[lessonId] || 0) + 1;
-  await setDoc(ref, {
-    quizScores, quizAttempts,
-    lastUpdate: serverTimestamp()
-  }, { merge: true });
-  return { score, bestScore: quizScores[lessonId], attempts: quizAttempts[lessonId] };
+// ============================================
+// COUPONS
+// ============================================
+function dbToFrontCoupon(row) {
+  if (!row) return null;
+  return {
+    id: row.id, code: row.code,
+    discountType: row.discount_type, discountValue: row.discount_value,
+    appliesTo: row.applies_to,
+    courseIds: row.course_ids || [], lessonIds: row.lesson_ids || [],
+    expiresAt: row.expires_at || 0, maxUses: row.max_uses || 0,
+    usedCount: row.used_count || 0, active: row.active,
+    createdAt: row.created_at ? { seconds: Math.floor(new Date(row.created_at).getTime()/1000) } : null
+  };
 }
 
-
-// ============================================
-// F4b: COUPON SYSTEM
-// ============================================
-
-/** Admin: tạo coupon mới */
 export async function createCoupon(data) {
-  const code = (data.code || "").toUpperCase().trim();
-  if (!code) throw new Error("Mã coupon không được trống");
-  // Check duplicate
-  const exist = await getDocs(query(collection(db, "coupons"), where("code", "==", code)));
-  if (!exist.empty) throw new Error("Mã coupon đã tồn tại: " + code);
-
-  const ref = await addDoc(collection(db, "coupons"), {
+  const code = (data.code || '').toUpperCase().trim();
+  if (!code) throw new Error('Mã coupon không được trống');
+  const { data: existing } = await supabase.from('coupons').select('id').eq('code', code).limit(1);
+  if (existing && existing.length > 0) throw new Error('Mã coupon đã tồn tại: ' + code);
+  const { data: inserted, error } = await supabase.from('coupons').insert([{
     code,
-    discountType: data.discountType || "percent", // "percent" | "fixed"
-    discountValue: data.discountValue || 0,
-    appliesTo: data.appliesTo || "all", // "all" | "courses" | "lessons"
-    courseIds: data.courseIds || [],
-    lessonIds: data.lessonIds || [],
-    expiresAt: data.expiresAt || 0,
-    maxUses: data.maxUses || 0,
-    usedCount: 0,
-    active: true,
-    createdAt: serverTimestamp()
-  });
-  return ref.id;
+    discount_type: data.discountType || 'percent',
+    discount_value: data.discountValue || 0,
+    applies_to: data.appliesTo || 'all',
+    course_ids: data.courseIds || [],
+    lesson_ids: data.lessonIds || [],
+    expires_at: data.expiresAt || 0,
+    max_uses: data.maxUses || 0,
+    used_count: 0, active: true
+  }]).select('id').single();
+  if (error) throw error;
+  return inserted.id;
 }
 
-/** Admin: list tất cả coupon */
 export async function fetchCoupons() {
-  const snap = await getDocs(collection(db, "coupons"));
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  return items;
+  const { data, error } = await supabase.from('coupons').select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(dbToFrontCoupon);
 }
 
-/** Admin: xóa coupon */
 export async function deleteCoupon(couponId) {
-  await deleteDoc(doc(db, "coupons", couponId));
+  const { error } = await supabase.from('coupons').delete().eq('id', couponId);
+  if (error) throw error;
 }
 
-/** Admin: toggle active */
 export async function toggleCoupon(couponId, active) {
-  await updateDoc(doc(db, "coupons", couponId), { active });
+  const { error } = await supabase.from('coupons').update({ active }).eq('id', couponId);
+  if (error) throw error;
 }
 
-/** Admin: cập nhật coupon (KHÔNG đổi code, KHÔNG reset usedCount) */
 export async function updateCoupon(couponId, data) {
-  // Whitelist updatable fields — không cho update code/usedCount
-  const allowed = {};
-  if (data.discountType !== undefined) allowed.discountType = data.discountType;
-  if (data.discountValue !== undefined) allowed.discountValue = data.discountValue;
-  if (data.appliesTo !== undefined) allowed.appliesTo = data.appliesTo;
-  if (data.courseIds !== undefined) allowed.courseIds = data.courseIds;
-  if (data.lessonIds !== undefined) allowed.lessonIds = data.lessonIds;
-  if (data.expiresAt !== undefined) allowed.expiresAt = data.expiresAt;
-  if (data.maxUses !== undefined) allowed.maxUses = data.maxUses;
-  if (data.active !== undefined) allowed.active = data.active;
-  await updateDoc(doc(db, "coupons", couponId), allowed);
+  const patch = {};
+  if (data.discountType !== undefined) patch.discount_type = data.discountType;
+  if (data.discountValue !== undefined) patch.discount_value = data.discountValue;
+  if (data.appliesTo !== undefined) patch.applies_to = data.appliesTo;
+  if (data.courseIds !== undefined) patch.course_ids = data.courseIds;
+  if (data.lessonIds !== undefined) patch.lesson_ids = data.lessonIds;
+  if (data.expiresAt !== undefined) patch.expires_at = data.expiresAt;
+  if (data.maxUses !== undefined) patch.max_uses = data.maxUses;
+  if (data.active !== undefined) patch.active = data.active;
+  const { error } = await supabase.from('coupons').update(patch).eq('id', couponId);
+  if (error) throw error;
 }
 
-/** USER: validate coupon code khi thanh toán
- *  @param code - mã coupon (uppercase)
- *  @param type - "lesson" hoặc "course"
- *  @param targetId - lessonId hoặc courseId
- *  @param originalPrice - giá gốc
- *  @returns {valid, error, discountAmount, finalPrice, couponId}
- */
 export async function validateCoupon(code, type, targetId, originalPrice) {
-  const normCode = (code || "").toUpperCase().trim();
-  if (!normCode) return { valid: false, error: "Vui lòng nhập mã coupon" };
-
-  const snap = await getDocs(query(collection(db, "coupons"), where("code", "==", normCode)));
-  if (snap.empty) return { valid: false, error: "Mã coupon không tồn tại" };
-
-  const c = { id: snap.docs[0].id, ...snap.docs[0].data() };
-
-  if (c.active === false) return { valid: false, error: "Coupon đã bị tắt" };
-  if (c.expiresAt && c.expiresAt > 0 && c.expiresAt < Date.now()) return { valid: false, error: "Coupon đã hết hạn" };
-  if (c.maxUses > 0 && c.usedCount >= c.maxUses) return { valid: false, error: "Coupon đã hết lượt dùng" };
-
-  // Check applicability
-  if (c.appliesTo === "courses" && type === "course") {
-    if (c.courseIds.length > 0 && !c.courseIds.includes(targetId)) {
-      return { valid: false, error: "Coupon không áp dụng cho khóa này" };
-    }
-  } else if (c.appliesTo === "lessons" && type === "lesson") {
-    if (c.lessonIds.length > 0 && !c.lessonIds.includes(targetId)) {
-      return { valid: false, error: "Coupon không áp dụng cho bài này" };
-    }
-  } else if (c.appliesTo === "all") {
-    // ok any
-  } else {
-    // appliesTo mismatch type
-    return { valid: false, error: `Coupon chỉ áp dụng cho ${c.appliesTo === "courses" ? "khóa học" : "bài học"}` };
+  const normCode = (code || '').toUpperCase().trim();
+  if (!normCode) return { valid: false, error: 'Vui lòng nhập mã coupon' };
+  const { data } = await supabase.from('coupons').select('*').eq('code', normCode).limit(1);
+  if (!data || data.length === 0) return { valid: false, error: 'Mã coupon không tồn tại' };
+  const c = dbToFrontCoupon(data[0]);
+  if (c.active === false) return { valid: false, error: 'Coupon đã bị tắt' };
+  if (c.expiresAt && c.expiresAt > 0 && c.expiresAt < Date.now()) return { valid: false, error: 'Coupon đã hết hạn' };
+  if (c.maxUses > 0 && c.usedCount >= c.maxUses) return { valid: false, error: 'Coupon đã hết lượt dùng' };
+  if (c.appliesTo === 'courses' && type === 'course') {
+    if (c.courseIds.length > 0 && !c.courseIds.includes(targetId)) return { valid: false, error: 'Coupon không áp dụng cho khóa này' };
+  } else if (c.appliesTo === 'lessons' && type === 'lesson') {
+    if (c.lessonIds.length > 0 && !c.lessonIds.includes(targetId)) return { valid: false, error: 'Coupon không áp dụng cho bài này' };
+  } else if (c.appliesTo !== 'all') {
+    return { valid: false, error: `Coupon chỉ áp dụng cho ${c.appliesTo === 'courses' ? 'khóa học' : 'bài học'}` };
   }
-
-  // Calculate discount
-  let discountAmount = 0;
-  if (c.discountType === "percent") {
-    discountAmount = Math.round(originalPrice * c.discountValue / 100);
-  } else {
-    discountAmount = c.discountValue;
-  }
+  let discountAmount = c.discountType === 'percent'
+    ? Math.round(originalPrice * c.discountValue / 100)
+    : c.discountValue;
   discountAmount = Math.min(discountAmount, originalPrice);
   const finalPrice = Math.max(0, originalPrice - discountAmount);
-
   return {
-    valid: true,
-    discountAmount, finalPrice,
+    valid: true, discountAmount, finalPrice,
     couponId: c.id, code: c.code,
     discountType: c.discountType, discountValue: c.discountValue
   };
 }
 
-/** Tăng usedCount sau khi user áp dụng coupon vào payment */
 export async function incrementCouponUsage(couponId) {
-  const ref = doc(db, "coupons", couponId);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return;
-  const current = snap.data().usedCount || 0;
-  await updateDoc(ref, { usedCount: current + 1 });
+  const { data } = await supabase.from('coupons').select('used_count').eq('id', couponId).single();
+  if (!data) return;
+  await supabase.from('coupons').update({ used_count: (data.used_count || 0) + 1 }).eq('id', couponId);
 }
