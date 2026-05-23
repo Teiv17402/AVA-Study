@@ -69,19 +69,38 @@ export async function initHomePage() {
       const lessons = course.lessons || [];
       const prog = getCourseProgress(lessons, completed);
       const hasVipLessons = lessons.some(l => l.isVip);
-      const vipBadge = course.isVip
-        ? `<div class="course-vip-overlay course-vip-full"><span>👑 KHÓA VIP</span><strong>${formatVnd(course.price || BANK_CONFIG.defaultPrice)}</strong></div>`
+      // Tìm giá min của các bài VIP (cho hiển thị giá khi khóa có bài VIP riêng)
+      const minVipLessonPrice = hasVipLessons
+        ? Math.min(...lessons.filter(l => l.isVip).map(l => l.price || BANK_CONFIG.defaultPrice))
+        : 0;
+
+      const lockSvg = `<svg class="thumb-lock-svg" viewBox="0 0 64 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M16 36V22C16 13.16 23.16 6 32 6C40.84 6 48 13.16 48 22V36" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+        <rect x="8" y="36" width="48" height="38" rx="6" stroke="currentColor" stroke-width="5" fill="none"/>
+        <circle cx="32" cy="52" r="4" fill="currentColor"/>
+        <path d="M32 56v8" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+      </svg>`;
+
+      const thumbContent = course.isVip
+        ? `<div class="course-thumb thumb-locked thumb-locked-full">${lockSvg}<div class="thumb-lock-label">👑 KHÓA VIP</div></div>`
         : hasVipLessons
-          ? `<div class="course-vip-overlay course-vip-partial"><span>👑 Có bài VIP</span></div>`
+          ? `<div class="course-thumb thumb-locked thumb-locked-partial">${lockSvg}<div class="thumb-lock-label">👑 CÓ BÀI VIP</div></div>`
+          : `<div class="course-thumb">▶</div>`;
+
+      const priceLine = course.isVip
+        ? `<div class="course-price-line"><span class="price-label">💰 Mở toàn khóa:</span> <strong class="price-value">${formatVnd(course.price || BANK_CONFIG.defaultPrice)}</strong></div>`
+        : hasVipLessons
+          ? `<div class="course-price-line price-partial"><span class="price-label">💰 Bài VIP từ:</span> <strong class="price-value">${formatVnd(minVipLessonPrice)}</strong></div>`
           : "";
+
       return `
-        <a class="course-card ${course.isVip ? 'vip-course' : ''}" href="course.html?id=${encodeURIComponent(course.id)}">
-          ${vipBadge}
-          <div class="course-thumb">▶</div>
+        <a class="course-card ${course.isVip ? 'vip-course' : ''}${hasVipLessons && !course.isVip ? ' has-vip-lessons' : ''}" href="course.html?id=${encodeURIComponent(course.id)}">
+          ${thumbContent}
           <div class="course-body">
             ${course.level ? `<span class="course-level">${escapeHtml(course.level)}</span>` : ""}
             <h3 class="course-title">${escapeHtml(course.title)}</h3>
             <p class="course-desc">${escapeHtml(course.description || "")}</p>
+            ${priceLine}
             <div class="course-meta">
               <span>📖 ${lessons.length} bài</span>
               <span>${prog.percent}% hoàn thành</span>
