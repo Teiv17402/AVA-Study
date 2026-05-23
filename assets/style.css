@@ -2113,3 +2113,90 @@ textarea { resize: vertical; min-height: 80px; }
   color: #ef4444;
   border-color: rgba(239,68,68,0.4);
 }
+
+
+/* === Course thumb: locked state with big lock SVG === */
+.course-thumb.thumb-locked {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 0;
+  transition: 0.25s ease;
+}
+.thumb-lock-svg {
+  width: 80px;
+  height: 100px;
+  filter: drop-shadow(0 4px 14px rgba(0,0,0,0.45));
+}
+.thumb-locked-full {
+  background: linear-gradient(135deg, #4a3915 0%, #2a1f0a 50%, #1a1208 100%);
+  color: #d4af6e;
+}
+.thumb-locked-full .thumb-lock-svg {
+  filter: drop-shadow(0 6px 20px rgba(212,175,110,0.5));
+}
+.thumb-locked-partial {
+  background: linear-gradient(135deg, #2a2010 0%, #1a1a1a 100%);
+  color: rgba(212,175,110,0.65);
+}
+.thumb-lock-label {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: inherit;
+  padding: 6px 14px;
+  background: rgba(0,0,0,0.4);
+  border-radius: 20px;
+  border: 1px solid currentColor;
+}
+
+/* Hide old overlay since we now use thumb */
+.course-vip-overlay { display: none !important; }
+
+.course-card.vip-course {
+  border: 2px solid rgba(212,175,110,0.45);
+  background: linear-gradient(180deg, rgba(212,175,110,0.04), rgba(15,15,15,0.6));
+}
+.course-card.vip-course:hover {
+  border-color: #d4af6e;
+  box-shadow: 0 12px 32px rgba(212,175,110,0.25);
+  transform: translateY(-4px);
+}
+.course-card.has-vip-lessons {
+  border: 1.5px solid rgba(212,175,110,0.25);
+}
+
+/* === Price line in course body === */
+.course-price-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, rgba(212,175,110,0.18), rgba(139,107,58,0.08));
+  border: 1px solid rgba(212,175,110,0.45);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 14px 0 12px;
+}
+.course-price-line .price-label {
+  font-size: 12px;
+  color: var(--text-soft);
+  font-weight: 500;
+}
+.course-price-line .price-value {
+  font-size: 19px;
+  color: #d4af6e;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+.course-price-line.price-partial {
+  background: rgba(255,255,255,0.02);
+  border-style: dashed;
+  border-color: rgba(212,175,110,0.3);
+}
+.course-price-line.price-partial .price-value {
+  font-size: 16px;
+}
