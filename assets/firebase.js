@@ -89,6 +89,12 @@ export function onAuthStateChanged(_authParam, callback) {
 export async function ensureUserDoc(user) {
   if (!user) return;
   const role = isAdmin(user) ? 'admin' : 'user';
+  
+  // Check if first time (no existing row)
+  const { data: existing } = await supabase
+    .from('user_progress').select('user_id').eq('user_id', user.uid).maybeSingle();
+  const isFirstTime = !existing;
+  
   const { error } = await supabase
     .from('user_progress')
     .upsert({
@@ -100,6 +106,24 @@ export async function ensureUserDoc(user) {
       last_login: new Date().toISOString()
     }, { onConflict: 'user_id' });
   if (error) console.warn('ensureUserDoc:', error);
+  
+  // Fire welcome email if first time (non-admin)
+  if (isFirstTime && !isAdmin(user)) {
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      if (session) {
+        // Fire and forget — don't await
+        fetch('/api/welcome-email', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + session.access_token,
+            'Content-Type': 'application/json'
+          },
+          body: '{}'
+        }).then(r => r.json()).then(d => console.log('Welcome email:', d)).catch(e => console.warn('Welcome err:', e));
+      }
+    } catch (e) { console.warn('Welcome trigger error:', e); }
+  }
 }
 
 export function waitForAuth() {
