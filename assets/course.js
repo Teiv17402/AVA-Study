@@ -223,6 +223,7 @@ function renderSidebar() {
 
 function loadLesson(index) {
   if (index < 0 || index >= currentLessons.length) return;
+  hideLockOverlay(); // clear any existing overlay
   const lesson = currentLessons[index];
   const status = getLessonStatus(currentLessons, index, userProgress, currentCourse);
 
@@ -326,6 +327,18 @@ function loadLesson(index) {
 
 async function renderVipPaymentNotice(lesson) {
   const price = lesson.price || BANK_CONFIG.defaultPrice;
+
+  // Show lockscreen overlay (dismissible)
+  showLockOverlay({
+    title: "👑 Bài học VIP",
+    subtitle: `Bài <strong>${escapeHtml(lesson.title)}</strong> cần thanh toán <strong style="color:#d4af6e">${formatVnd(price)}</strong> để mở khóa.`,
+    hint: "Thanh toán bằng QR + chờ admin duyệt.",
+    dismissible: true,
+    actions: [
+      { label: "💳 Mua ngay", primary: true, onClick: () => { hideLockOverlay(); showPaymentModal(lesson, price); } },
+      { label: "← Quay lại", primary: false, onClick: () => { hideLockOverlay(); location.href = "home.html"; } }
+    ]
+  });
 
   // Check existing payment status
   const existingPayment = await fetchMyPaymentForLesson(currentUser.uid, lesson.id);
@@ -473,6 +486,18 @@ async function showPaymentModal(lesson, price) {
 
 async function renderCourseVipPaymentNotice(course, lesson) {
   const price = course.price || BANK_CONFIG.defaultPrice;
+
+  showLockOverlay({
+    title: "👑 Khóa học VIP",
+    subtitle: `Khóa <strong>${escapeHtml(course.title)}</strong> cần mua ${formatVnd(price)} để mở <strong>toàn bộ ${(course.lessons || []).length} bài</strong>.`,
+    hint: "Thanh toán 1 lần — xem được tất cả bài trong khóa.",
+    dismissible: true,
+    actions: [
+      { label: "💳 Mua khóa ngay", primary: true, onClick: () => { hideLockOverlay(); showCoursePaymentModal(course, price); } },
+      { label: "← Quay lại", primary: false, onClick: () => { hideLockOverlay(); location.href = "home.html"; } }
+    ]
+  });
+
   const existingPayment = await fetchMyPaymentForCourse(currentUser.uid, course.id);
 
   const videoWrap = document.getElementById("video-wrap");
@@ -625,8 +650,7 @@ function renderBannedScreen(ban) {
 // ============================================
 // LOCKSCREEN OVERLAY (full-page mờ + icon ổ khóa lớn)
 // ============================================
-function showLockOverlay({ title, subtitle, hint, actions }) {
-  // Remove existing overlay if any
+function showLockOverlay({ title, subtitle, hint, actions, dismissible }) {
   const old = document.getElementById("lock-overlay");
   if (old) old.remove();
 
@@ -635,6 +659,7 @@ function showLockOverlay({ title, subtitle, hint, actions }) {
   overlay.className = "lock-overlay";
   overlay.innerHTML = `
     <div class="lock-overlay-inner">
+      ${dismissible ? `<button class="lock-close" id="lock-close-btn" title="Đóng">×</button>` : ""}
       <div class="lock-icon-big">
         <svg viewBox="0 0 64 80" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M16 36V22C16 13.16 23.16 6 32 6C40.84 6 48 13.16 48 22V36" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
@@ -647,14 +672,42 @@ function showLockOverlay({ title, subtitle, hint, actions }) {
       <p class="lock-subtitle">${subtitle}</p>
       ${hint ? `<p class="lock-hint">${hint}</p>` : ""}
       <div class="lock-actions">
-        ${actions.map(a => `<a href="${a.href}" class="btn ${a.primary ? 'btn-primary' : 'btn-secondary'}">${a.label}</a>`).join("")}
+        ${actions.map((a, i) => `<button class="btn ${a.primary ? 'btn-primary' : 'btn-secondary'}" data-lock-action="${i}">${a.label}</button>`).join("")}
       </div>
     </div>
   `;
   document.body.appendChild(overlay);
+
+  // Bind actions
+  actions.forEach((a, i) => {
+    const btn = overlay.querySelector(`[data-lock-action="${i}"]`);
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      if (a.onClick) a.onClick();
+      else if (a.href) location.href = a.href;
+    });
+  });
+
+  // Close button
+  const closeBtn = document.getElementById("lock-close-btn");
+  if (closeBtn) closeBtn.addEventListener("click", () => overlay.remove());
+}
+
+function hideLockOverlay() {
+  const el = document.getElementById("lock-overlay");
+  if (el) el.remove();
 }
 
 function renderExpiredNotice(lesson) {
+  showLockOverlay({
+    title: "⌛ Bài học đã khóa",
+    subtitle: `Bài <strong>${escapeHtml(lesson.title)}</strong> đã quá 24h kể từ lúc được mở mà bạn chưa hoàn thành.`,
+    hint: "Vi phạm này được ghi nhận. Liên hệ admin để mở lại.",
+    dismissible: true,
+    actions: [
+      { label: "← Về trang chủ", primary: false, onClick: () => { hideLockOverlay(); location.href = "home.html"; } }
+    ]
+  });
   const videoWrap = document.getElementById("video-wrap");
   videoWrap.innerHTML = `
     <div class="video-placeholder">
