@@ -325,7 +325,8 @@ function renderQuizQuestions(questions) {
       ${[0,1,2,3].map(j => `
         <label class="quiz-opt-row">
           <input type="radio" name="correct-${i}" data-correct="${i}" value="${j}" ${q.correct === j ? "checked" : ""} />
-          <input type="text" class="quiz-opt-text" data-q-opt="${i}-${j}" placeholder="Đáp án ${String.fromCharCode(65+j)}" value="${escapeAttr((q.opts && q.opts[j]) || "")}" />
+          <span class="quiz-opt-letter">${String.fromCharCode(65+j)}.</span>
+          <input type="text" class="quiz-opt-text" data-q-opt="${i}-${j}" placeholder="Đáp án ${String.fromCharCode(65+j)} (bắt buộc)" value="${escapeAttr((q.opts && q.opts[j]) || "")}" />
         </label>
       `).join("")}
       <div class="quiz-q-hint">Tick chọn đáp án ĐÚNG</div>
@@ -376,6 +377,20 @@ async function saveLesson() {
   const lessons = (course.lessons || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
 
   const quiz = collectQuizFromForm();
+
+  // Validate quiz: each question needs 4 non-empty options
+  for (let i = 0; i < quiz.length; i++) {
+    const q = quiz[i];
+    if (!q.q || q.q.trim().length === 0) {
+      flashMessage("Câu " + (i+1) + ": thiếu nội dung câu hỏi", "error");
+      return;
+    }
+    const emptyOpts = q.opts.filter(o => !o || o.trim().length === 0).length;
+    if (emptyOpts > 0) {
+      flashMessage("Câu " + (i+1) + ": phải điền đầy đủ cả 4 đáp án A/B/C/D", "error");
+      return;
+    }
+  }
 
   if (editingLesson.lessonIndex !== null) {
     const existing = lessons[editingLesson.lessonIndex];
