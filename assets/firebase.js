@@ -711,3 +711,113 @@ export async function saveQuizScore(userId, lessonId, score) {
   }, { merge: true });
   return { score, bestScore: quizScores[lessonId], attempts: quizAttempts[lessonId] };
 }
+
+
+// ============================================
+// F4b: COUPON SYSTEM
+// ============================================
+
+/** Admin: tạo coupon mới */
+export async function createCoupon(data) {
+  const code = (data.code || "").toUpperCase().trim();
+  if (!code) throw new Error("Mã coupon không được trống");
+  // Check duplicate
+  const exist = await getDocs(query(collection(db, "coupons"), where("code", "==", code)));
+  if (!exist.empty) throw new Error("Mã coupon đã tồn tại: " + code);
+
+  const ref = await addDoc(collection(db, "coupons"), {
+    code,
+    discountType: data.discountType || "percent", // "percent" | "fixed"
+    discountValue: data.discountValue || 0,
+    appliesTo: data.appliesTo || "all", // "all" | "courses" | "lessons"
+    courseIds: data.courseIds || [],
+    lessonIds: data.lessonIds || [],
+    expiresAt: data.expiresAt || 0,
+    maxUses: data.maxUses || 0,
+    usedCount: 0,
+    active: true,
+    createdAt: serverTimestamp()
+  });
+  return ref.id;
+}
+
+/** Admin: list tất cả coupon */
+export async function fetchCoupons() {
+  const snap = await getDocs(collection(db, "coupons"));
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  return items;
+}
+
+/** Admin: xóa coupon */
+export async function deleteCoupon(couponId) {
+  await deleteDoc(doc(db, "coupons", couponId));
+}
+
+/** Admin: toggle active */
+export async function toggleCoupon(couponId, active) {
+  await updateDoc(doc(db, "coupons", couponId), { active });
+}
+
+/** USER: validate coupon code khi thanh toán
+ *  @param code - mã coupon (uppercase)
+ *  @param type - "lesson" hoặc "course"
+ *  @param targetId - lessonId hoặc courseId
+ *  @param originalPrice - giá gốc
+ *  @returns {valid, error, discountAmount, finalPrice, couponId}
+ */
+export async function validateCoupon(code, type, targetId, originalPrice) {
+  const normCode = (code || "").toUpperCase().trim();
+  if (!normCode) return { valid: false, error: "Vui lòng nhập mã coupon" };
+
+  const snap = await getDocs(query(collection(db, "coupons"), where("code", "==", normCode)));
+  if (snap.empty) return { valid: false, error: "Mã coupon không tồn tại" };
+
+  const c = { id: snap.docs[0].id, ...snap.docs[0].data() };
+
+  if (c.active === false) return { valid: false, error: "Coupon đã bị tắt" };
+  if (c.expiresAt && c.expiresAt > 0 && c.expiresAt < Date.now()) return { valid: false, error: "Coupon đã hết hạn" };
+  if (c.maxUses > 0 && c.usedCount >= c.maxUses) return { valid: false, error: "Coupon đã hết lượt dùng" };
+
+  // Check applicability
+  if (c.appliesTo === "courses" && type === "course") {
+    if (c.courseIds.length > 0 && !c.courseIds.includes(targetId)) {
+      return { valid: false, error: "Coupon không áp dụng cho khóa này" };
+    }
+  } else if (c.appliesTo === "lessons" && type === "lesson") {
+    if (c.lessonIds.length > 0 && !c.lessonIds.includes(targetId)) {
+      return { valid: false, error: "Coupon không áp dụng cho bài này" };
+    }
+  } else if (c.appliesTo === "all") {
+    // ok any
+  } else {
+    // appliesTo mismatch type
+    return { valid: false, error: `Coupon chỉ áp dụng cho ${c.appliesTo === "courses" ? "khóa học" : "bài học"}` };
+  }
+
+  // Calculate discount
+  let discountAmount = 0;
+  if (c.discountType === "percent") {
+    discountAmount = Math.round(originalPrice * c.discountValue / 100);
+  } else {
+    discountAmount = c.discountValue;
+  }
+  discountAmount = Math.min(discountAmount, originalPrice);
+  const finalPrice = Math.max(0, originalPrice - discountAmount);
+
+  return {
+    valid: true,
+    discountAmount, finalPrice,
+    couponId: c.id, code: c.code,
+    discountType: c.discountType, discountValue: c.discountValue
+  };
+}
+
+/** Tăng usedCount sau khi user áp dụng coupon vào payment */
+export async function incrementCouponUsage(couponId) {
+  const ref = doc(db, "coupons", couponId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const current = snap.data().usedCount || 0;
+  await updateDoc(ref, { usedCount: current + 1 });
+}
