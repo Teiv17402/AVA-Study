@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bảng xếp hạng — AVA</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23ffd60a%22 rx=%2220%22/><text x=%2250%22 y=%2270%22 font-size=%2260%22 text-anchor=%22middle%22 font-family=%22Arial Black%22 fill=%22%23000%22>A</text></svg>" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="logo">
+        <span class="logo-mark">A</span>
+        <span>AVA</span>
+      </a>
+      <div class="header-actions" id="header-actions">
+        <span class="spinner"></span>
+      </div>
+    </div>
+  </header>
+
+  <main class="leaderboard-layout">
+    <div class="leaderboard-header">
+      <h1 class="page-title">🏆 Bảng <span class="accent">xếp hạng</span></h1>
+      <p class="page-subtitle">Cộng điểm khi hoàn thành bài, mất điểm khi vi phạm. Top mỗi tháng sẽ được tặng quà.</p>
+    </div>
+
+    <div class="leaderboard-tabs">
+      <button class="lb-tab active" data-tab="month">📅 Tháng này</button>
+      <button class="lb-tab" data-tab="all">🌟 Mọi thời điểm</button>
+    </div>
+
+    <div class="leaderboard-podium" id="leaderboard-podium">
+      <div class="loading-screen"><div class="spinner"></div><p>Đang tải...</p></div>
+    </div>
+
+    <div class="leaderboard-list" id="leaderboard-list"></div>
+
+    <div class="my-rank-card" id="my-rank-card"></div>
+  </main>
+
+  <footer class="site-footer">
+    AVA — Học để xếp hạng
+  </footer>
+
+  <script type="module" src="assets/app.js"></script>
+  <script type="module">
+    import { initLeaderboardPage } from "./assets/leaderboard.js";
+    initLeaderboardPage();
+  </script>
+</body>
+</html>
