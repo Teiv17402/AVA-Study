@@ -5,11 +5,13 @@ import {
   requireAuth,
   fetchCourses,
   fetchUserProgress,
-  isAdmin
+  isAdmin,
+  BANK_CONFIG
 } from "./firebase.js";
 import {
   escapeHtml,
   getCourseProgress,
+  formatVnd,
   flashMessage,
   renderHeader
 } from "./app.js";
@@ -48,8 +50,15 @@ export async function initHomePage() {
     grid.innerHTML = courses.map(course => {
       const lessons = course.lessons || [];
       const prog = getCourseProgress(lessons, completed);
+      const hasVipLessons = lessons.some(l => l.isVip);
+      const vipBadge = course.isVip
+        ? `<div class="course-vip-overlay course-vip-full"><span>👑 KHÓA VIP</span><strong>${formatVnd(course.price || BANK_CONFIG.defaultPrice)}</strong></div>`
+        : hasVipLessons
+          ? `<div class="course-vip-overlay course-vip-partial"><span>👑 Có bài VIP</span></div>`
+          : "";
       return `
-        <a class="course-card" href="course.html?id=${encodeURIComponent(course.id)}">
+        <a class="course-card ${course.isVip ? 'vip-course' : ''}" href="course.html?id=${encodeURIComponent(course.id)}">
+          ${vipBadge}
           <div class="course-thumb">▶</div>
           <div class="course-body">
             ${course.level ? `<span class="course-level">${escapeHtml(course.level)}</span>` : ""}
