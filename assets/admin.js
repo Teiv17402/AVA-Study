@@ -22,6 +22,10 @@ import {
   fetchBannedUsers,
   unbanUser,
   calculateScore,
+  createCoupon,
+  fetchCoupons,
+  deleteCoupon,
+  toggleCoupon
   BANK_CONFIG
 } from "./firebase.js";
 import {
@@ -58,6 +62,7 @@ function setupTabs() {
       document.getElementById(`section-${tabName}`).classList.add("active");
       if (tabName === "users") loadUsers();
       if (tabName === "payments") loadPaymentsHistory();
+      if (tabName === "coupons") loadCoupons();
     });
   });
 
@@ -224,6 +229,12 @@ function setupModals() {
       renderQuizQuestions(current);
     });
   }
+
+  // Coupon buttons
+  const newCpBtn = document.getElementById("btn-new-coupon");
+  if (newCpBtn) newCpBtn.addEventListener("click", () => openCouponModal());
+  const saveCpBtn = document.getElementById("btn-save-coupon");
+  if (saveCpBtn) saveCpBtn.addEventListener("click", saveCouponForm);
 }
 
 function openCourseModal(course = null) {
@@ -934,4 +945,156 @@ function renderPaymentsRows(payments) {
       </table>
     </div>
   `;
+}
+
+
+// ============================================
+// COUPONS (admin)
+// ============================================
+let editingCouponId = null;
+
+async function loadCoupons() {
+  const c = document.getElementById("coupons-container");
+  try {
+    const coupons = await fetchCoupons();
+    if (!coupons.length) {
+      c.innerHTML = `<p style="color:var(--text-mute);font-style:italic;padding:30px;text-align:center">Chưa có coupon nào. Bấm "+ Tạo coupon mới" để bắt đầu.</p>`;
+      return;
+    }
+
+    c.innerHTML = `
+      <div style="overflow-x:auto">
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th>Mã</th>
+              <th>Giảm</th>
+              <th>Áp dụng</th>
+              <th>Đã dùng / Tối đa</th>
+              <th>Hết hạn</th>
+              <th>Trạng thái</th>
+              <th>Hành động</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${coupons.map(cp => {
+              const expired = cp.expiresAt > 0 && cp.expiresAt < Date.now();
+              const usedUp = cp.maxUses > 0 && cp.usedCount >= cp.maxUses;
+              const isActive = cp.active !== false && !expired && !usedUp;
+              const statusBadge = isActive
+                ? '<span class="status-badge success">✓ Hoạt động</span>'
+                : expired
+                  ? '<span class="status-badge danger">⏰ Hết hạn</span>'
+                  : usedUp
+                    ? '<span class="status-badge danger">🔚 Hết lượt</span>'
+                    : '<span class="status-badge warn">⏸ Tắt</span>';
+              const discountLabel = cp.discountType === "percent"
+                ? `<strong style="color:#d4af6e">-${cp.discountValue}%</strong>`
+                : `<strong style="color:#d4af6e">-${formatVnd(cp.discountValue)}</strong>`;
+              const appliesLabel = cp.appliesTo === "all"
+                ? "Tất cả"
+                : cp.appliesTo === "courses"
+                  ? `Khóa${cp.courseIds.length > 0 ? ` (${cp.courseIds.length})` : ""}`
+                  : `Bài${cp.lessonIds.length > 0 ? ` (${cp.lessonIds.length})` : ""}`;
+              const expireLabel = cp.expiresAt > 0
+                ? new Date(cp.expiresAt).toLocaleDateString("vi-VN")
+                : "—";
+              return `
+                <tr>
+                  <td><code style="background:rgba(212,175,110,0.1);padding:4px 8px;border-radius:4px;color:#d4af6e;font-weight:700">${escapeHtml(cp.code)}</code></td>
+                  <td>${discountLabel}</td>
+                  <td>${appliesLabel}</td>
+                  <td>${cp.usedCount || 0} / ${cp.maxUses || "∞"}</td>
+                  <td>${expireLabel}</td>
+                  <td>${statusBadge}</td>
+                  <td>
+                    <button class="btn btn-secondary btn-sm" data-toggle-coupon="${cp.id}" data-current="${cp.active !== false ? 1 : 0}">${cp.active !== false ? "⏸ Tắt" : "▶ Bật"}</button>
+                    <button class="btn btn-danger btn-sm" data-delete-coupon="${cp.id}" data-code="${escapeHtml(cp.code)}">🗑</button>
+                  </td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    // Bind buttons
+    c.querySelectorAll('[data-toggle-coupon]').forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.toggleCoupon;
+        const current = btn.dataset.current === "1";
+        try {
+          await toggleCoupon(id, !current);
+          flashMessage(current ? "Đã tắt coupon" : "Đã bật coupon", "success");
+          loadCoupons();
+        } catch (err) {
+          flashMessage("Lỗi: " + err.message, "error");
+        }
+      });
+    });
+
+    c.querySelectorAll('[data-delete-coupon]').forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.deleteCoupon;
+        const code = btn.dataset.code;
+        if (!confirm(`Xóa coupon "${code}"?`)) return;
+        try {
+          await deleteCoupon(id);
+          flashMessage("Đã xóa coupon", "success");
+          loadCoupons();
+        } catch (err) {
+          flashMessage("Lỗi: " + err.message, "error");
+        }
+      });
+    });
+  } catch (err) {
+    c.innerHTML = `<p style="color:#ef4444">Lỗi: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function openCouponModal() {
+  editingCouponId = null;
+  document.getElementById("coupon-code").value = "";
+  document.getElementById("coupon-type").value = "percent";
+  document.getElementById("coupon-value").value = "";
+  document.getElementById("coupon-applies").value = "all";
+  document.getElementById("coupon-courseids").value = "";
+  document.getElementById("coupon-lessonids").value = "";
+  document.getElementById("coupon-expires").value = "";
+  document.getElementById("coupon-max").value = "";
+  document.getElementById("modal-coupon").classList.add("active");
+}
+
+async function saveCouponForm() {
+  const code = document.getElementById("coupon-code").value.trim().toUpperCase();
+  if (!code) { flashMessage("Nhập mã coupon", "error"); return; }
+  const discountValue = parseInt(document.getElementById("coupon-value").value) || 0;
+  if (discountValue <= 0) { flashMessage("Giá trị giảm phải > 0", "error"); return; }
+
+  const expVal = document.getElementById("coupon-expires").value;
+  const expiresAt = expVal ? new Date(expVal).getTime() : 0;
+
+  const courseIdsRaw = document.getElementById("coupon-courseids").value.trim();
+  const lessonIdsRaw = document.getElementById("coupon-lessonids").value.trim();
+
+  const data = {
+    code,
+    discountType: document.getElementById("coupon-type").value,
+    discountValue,
+    appliesTo: document.getElementById("coupon-applies").value,
+    courseIds: courseIdsRaw ? courseIdsRaw.split(",").map(s => s.trim()).filter(Boolean) : [],
+    lessonIds: lessonIdsRaw ? lessonIdsRaw.split(",").map(s => s.trim()).filter(Boolean) : [],
+    expiresAt,
+    maxUses: parseInt(document.getElementById("coupon-max").value) || 0
+  };
+
+  try {
+    await createCoupon(data);
+    flashMessage("✓ Đã tạo coupon " + code, "success");
+    document.getElementById("modal-coupon").classList.remove("active");
+    await loadCoupons();
+  } catch (err) {
+    flashMessage("Lỗi: " + err.message, "error");
+  }
 }
