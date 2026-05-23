@@ -1652,21 +1652,21 @@ textarea { resize: vertical; min-height: 80px; }
 }
 
 
-/* === Leaderboard === */
+/* === Leaderboard (v3 — clean redesign) === */
 .leaderboard-layout {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 40px 24px 80px;
+  padding: 40px 24px 100px;
 }
 .leaderboard-header {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 28px;
 }
 .leaderboard-tabs {
   display: flex;
   justify-content: center;
   gap: 10px;
-  margin-bottom: 30px;
+  margin-bottom: 50px;
 }
 .lb-tab {
   padding: 10px 22px;
@@ -1685,43 +1685,128 @@ textarea { resize: vertical; min-height: 80px; }
   color: #000;
   border-color: #d4af6e;
 }
+
+/* Podium: 3 cards 2-1-3, all clean inside, NO floating icons */
 .leaderboard-podium {
   display: grid;
-  grid-template-columns: 1fr 1.2fr 1fr;
-  gap: 16px;
-  align-items: end;
-  margin-bottom: 40px;
+  grid-template-columns: 1fr 1.15fr 1fr;
+  gap: 18px;
+  align-items: stretch;
+  margin: 0 auto 36px;
+  max-width: 760px;
 }
 .podium-slot {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 24px 16px 20px;
-  text-align: center;
   position: relative;
-  transition: 0.2s ease;
+  border-radius: 16px;
+  padding: 28px 18px 24px;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(30,30,30,0.7), rgba(15,15,15,0.95));
+  border: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  transition: 0.25s ease;
 }
 .podium-slot.first {
-  border-color: #d4af6e;
-  background: linear-gradient(180deg, rgba(212,175,110,0.12), rgba(20,20,20,0.4));
-  padding-top: 40px;
-  transform: translateY(-10px);
+  background: linear-gradient(180deg, rgba(212,175,110,0.18), rgba(40,28,8,0.95));
+  border: 2px solid rgba(212,175,110,0.55);
+  box-shadow: 0 12px 30px rgba(212,175,110,0.18);
 }
-.podium-slot.second { border-color: #c0c0c0; }
-.podium-slot.third { border-color: #cd7f32; }
-.podium-medal { font-size: 38px; margin-bottom: 8px; }
-.podium-avatar { width: 64px; height: 64px; margin: 0 auto 12px; }
-.podium-avatar img, .avatar-fallback {
-  width: 100%; height: 100%; border-radius: 50%;
-  object-fit: cover;
+.podium-slot.second {
+  background: linear-gradient(180deg, rgba(192,197,208,0.15), rgba(30,32,38,0.95));
+  border: 1.5px solid rgba(192,197,208,0.4);
 }
-.avatar-fallback {
-  display: flex; align-items: center; justify-content: center;
-  background: #d4af6e; color: #000; font-weight: 700; font-size: 26px;
+.podium-slot.third {
+  background: linear-gradient(180deg, rgba(205,127,50,0.15), rgba(38,28,18,0.95));
+  border: 1.5px solid rgba(205,127,50,0.4);
 }
-.podium-name { font-weight: 700; margin-bottom: 6px; font-size: 14px; }
-.podium-score { color: #d4af6e; font-size: 22px; font-weight: 700; }
-.podium-rank { font-size: 11px; color: var(--text-mute); margin-top: 4px; }
+
+/* Inline rank badge at top of card */
+.podium-rank-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+.podium-slot.first .podium-rank-pill {
+  background: linear-gradient(135deg, #d4af6e, #8b6b3a);
+  color: #000;
+}
+.podium-slot.second .podium-rank-pill {
+  background: linear-gradient(135deg, #c0c5d0, #6e7282);
+  color: #1a1a1a;
+}
+.podium-slot.third .podium-rank-pill {
+  background: linear-gradient(135deg, #cd7f32, #7a4a1a);
+  color: #fff;
+}
+
+/* Number circle */
+.podium-num-circle {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 800;
+  margin-bottom: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 2px solid currentColor;
+}
+.podium-slot.first .podium-num-circle { color: #d4af6e; }
+.podium-slot.second .podium-num-circle { color: #c0c5d0; }
+.podium-slot.third .podium-num-circle { color: #cd7f32; }
+
+.podium-name {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #fff;
+  margin: 6px 0 14px;
+  min-height: 36px;
+  line-height: 1.25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  word-break: break-word;
+}
+.podium-slot.first .podium-name { font-size: 15px; }
+
+.podium-score-main {
+  font-size: 30px;
+  font-weight: 800;
+  color: #d4af6e;
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+.podium-slot.first .podium-score-main { font-size: 36px; }
+.podium-stat-label {
+  font-size: 10px;
+  color: var(--text-mute);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 6px;
+}
+.podium-mini-stats {
+  font-size: 11px;
+  color: var(--text-soft);
+  margin-top: 10px;
+}
+
+/* Hide old leftover classes from v1/v2 */
+.podium-medal, .podium-avatar, .podium-rank, .podium-score { display: none; }
+.podium-slot::before { display: none !important; }
 
 .lb-table {
   width: 100%; border-collapse: collapse;
@@ -1745,81 +1830,59 @@ textarea { resize: vertical; min-height: 80px; }
   z-index: 50;
 }
 .my-rank-inner {
-  background: linear-gradient(135deg, rgba(212,175,110,0.2), rgba(42,31,10,0.6));
+  background: linear-gradient(135deg, rgba(212,175,110,0.2), rgba(42,31,10,0.8));
   border: 1px solid rgba(212,175,110,0.4);
   border-radius: 14px;
   padding: 18px 22px;
   display: grid;
-  grid-template-columns: auto auto 1fr auto;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 16px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 .my-rank-label { font-size: 12px; color: var(--text-mute); text-transform: uppercase; }
 .my-rank-value { font-size: 32px; font-weight: 800; color: #d4af6e; }
-.my-rank-score { font-size: 18px; font-weight: 700; }
+.my-rank-score { font-size: 22px; font-weight: 700; }
 .my-rank-breakdown { font-size: 12px; color: var(--text-soft); text-align: right; }
 
-/* === Banned screens === */
-.banned-screen {
-  max-width: 600px;
-  margin: 60px auto;
-  text-align: center;
-  background: rgba(239,68,68,0.05);
-  border: 2px solid rgba(239,68,68,0.4);
-  border-radius: 16px;
-  padding: 40px 30px;
+/* === Score formula card === */
+.formula-card {
+  background: rgba(212,175,110,0.04);
+  border: 1px solid rgba(212,175,110,0.2);
+  border-radius: 12px;
+  padding: 18px 22px;
+  margin: 20px 0;
+  font-size: 13px;
+  line-height: 1.7;
 }
-.banned-icon { font-size: 72px; margin-bottom: 12px; }
-.banned-screen h1 { font-size: 28px; color: #ef4444; margin: 10px 0; }
-.banned-subtitle { color: var(--text-soft); font-size: 14px; margin-bottom: 20px; }
-.banned-info {
-  background: rgba(0,0,0,0.3);
-  border-radius: 10px;
-  padding: 16px;
-  display: grid;
-  gap: 8px;
+.formula-card h3 {
   font-size: 14px;
-}
-
-.ban-banner {
-  background: rgba(239,68,68,0.1);
-  border: 1px solid rgba(239,68,68,0.4);
-  border-radius: 10px;
-  padding: 14px 18px;
-  margin-bottom: 24px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  color: #ef4444;
-}
-.ban-banner-icon { font-size: 32px; }
-.ban-banner-text { font-size: 14px; flex: 1; }
-
-/* === Admin notifications & banned section === */
-.admin-notif-badge {
-  background: #ef4444;
-  color: #fff;
-  border-radius: 50%;
-  padding: 2px 8px;
-  font-size: 11px;
+  color: #d4af6e;
+  margin: 0 0 12px;
   font-weight: 700;
-  margin-left: 6px;
 }
-.notif-row {
-  background: rgba(239,68,68,0.06);
-  border-left: 4px solid #ef4444;
-  padding: 12px 16px;
-  border-radius: 8px;
-  margin-bottom: 10px;
+.formula-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px 18px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.formula-list li {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(255,255,255,0.06);
 }
-.notif-row .info { flex: 1; }
-.notif-row .info strong { color: #ef4444; }
-.notif-row .meta { font-size: 12px; color: var(--text-mute); margin-top: 2px; }
+.formula-list strong { color: #d4af6e; font-weight: 700; }
+.formula-list .neg { color: #ef4444; }
 
+@media (max-width: 700px) {
+  .leaderboard-podium { grid-template-columns: 1fr; gap: 16px; }
+  .my-rank-inner { grid-template-columns: 1fr; text-align: center; gap: 8px; }
+  .my-rank-breakdown { text-align: center; }
+}
 
 /* === LOCKSCREEN OVERLAY (full-page) === */
 .lock-overlay {
@@ -2022,4 +2085,31 @@ textarea { resize: vertical; min-height: 80px; }
 @media (max-width: 600px) {
   .leaderboard-podium { grid-template-columns: 1fr; gap: 30px; }
   .podium-slot.first { transform: none; }
+}
+
+
+/* Lock overlay close button */
+.lock-overlay-inner { position: relative; }
+.lock-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: var(--text-soft);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.2s ease;
+}
+.lock-close:hover {
+  background: rgba(239,68,68,0.2);
+  color: #ef4444;
+  border-color: rgba(239,68,68,0.4);
 }
