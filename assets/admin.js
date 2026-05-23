@@ -26,6 +26,7 @@ import {
   fetchCoupons,
   deleteCoupon,
   toggleCoupon,
+  updateCoupon,
   BANK_CONFIG
 } from "./firebase.js";
 import {
@@ -967,11 +968,13 @@ function renderPaymentsRows(payments) {
 // COUPONS (admin)
 // ============================================
 let editingCouponId = null;
+let allCoupons = [];
 
 async function loadCoupons() {
   const c = document.getElementById("coupons-container");
   try {
-    const coupons = await fetchCoupons();
+    allCoupons = await fetchCoupons();
+    const coupons = allCoupons;
     if (!coupons.length) {
       c.innerHTML = `<p style="color:var(--text-mute);font-style:italic;padding:30px;text-align:center">Chưa có coupon nào. Bấm "+ Tạo coupon mới" để bắt đầu.</p>`;
       return;
@@ -1011,9 +1014,7 @@ async function loadCoupons() {
                 : cp.appliesTo === "courses"
                   ? `Khóa${cp.courseIds.length > 0 ? ` (${cp.courseIds.length})` : ""}`
                   : `Bài${cp.lessonIds.length > 0 ? ` (${cp.lessonIds.length})` : ""}`;
-              const expireLabel = cp.expiresAt > 0
-                ? new Date(cp.expiresAt).toLocaleDateString("vi-VN")
-                : "—";
+              const expireLabel = formatExpireLabel(cp.expiresAt);
               return `
                 <tr>
                   <td><code style="background:rgba(212,175,110,0.1);padding:4px 8px;border-radius:4px;color:#d4af6e;font-weight:700">${escapeHtml(cp.code)}</code></td>
@@ -1022,9 +1023,10 @@ async function loadCoupons() {
                   <td>${cp.usedCount || 0} / ${cp.maxUses || "∞"}</td>
                   <td>${expireLabel}</td>
                   <td>${statusBadge}</td>
-                  <td>
-                    <button class="btn btn-secondary btn-sm" data-toggle-coupon="${cp.id}" data-current="${cp.active !== false ? 1 : 0}">${cp.active !== false ? "⏸ Tắt" : "▶ Bật"}</button>
-                    <button class="btn btn-danger btn-sm" data-delete-coupon="${cp.id}" data-code="${escapeHtml(cp.code)}">🗑</button>
+                  <td style="white-space:nowrap">
+                    <button class="btn btn-secondary btn-sm" data-edit-coupon="${cp.id}" title="Sửa">✎</button>
+                    <button class="btn btn-secondary btn-sm" data-toggle-coupon="${cp.id}" data-current="${cp.active !== false ? 1 : 0}">${cp.active !== false ? "⏸" : "▶"}</button>
+                    <button class="btn btn-danger btn-sm" data-delete-coupon="${cp.id}" data-code="${escapeHtml(cp.code)}" title="Xóa">🗑</button>
                   </td>
                 </tr>
               `;
@@ -1035,6 +1037,15 @@ async function loadCoupons() {
     `;
 
     // Bind buttons
+    // Bind edit
+    c.querySelectorAll('[data-edit-coupon]').forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.editCoupon;
+        const coupon = allCoupons.find(cp => cp.id === id);
+        if (coupon) openCouponModal(coupon);
+      });
+    });
+
     c.querySelectorAll('[data-toggle-coupon]').forEach(btn => {
       btn.addEventListener("click", async () => {
         const id = btn.dataset.toggleCoupon;
@@ -1068,22 +1079,38 @@ async function loadCoupons() {
   }
 }
 
-function openCouponModal() {
-  editingCouponId = null;
-  document.getElementById("coupon-code").value = "";
-  document.getElementById("coupon-type").value = "percent";
-  document.getElementById("coupon-value").value = "";
-  document.getElementById("coupon-applies").value = "all";
-  document.getElementById("coupon-courseids").value = "";
-  document.getElementById("coupon-lessonids").value = "";
-  document.getElementById("coupon-expires").value = "";
-  document.getElementById("coupon-max").value = "";
+function openCouponModal(coupon) {
+  editingCouponId = coupon ? coupon.id : null;
+  const titleH2 = document.querySelector("#modal-coupon .modal-header h2");
+  if (titleH2) titleH2.textContent = coupon ? `🎟️ Sửa Coupon "${coupon.code}"` : "🎟️ Tạo Coupon mới";
+
+  const codeInput = document.getElementById("coupon-code");
+  codeInput.value = coupon ? coupon.code : "";
+  codeInput.disabled = !!coupon; // không cho đổi code khi edit
+  codeInput.style.opacity = coupon ? "0.6" : "1";
+
+  document.getElementById("coupon-type").value = coupon ? coupon.discountType : "percent";
+  document.getElementById("coupon-value").value = coupon ? coupon.discountValue : "";
+  document.getElementById("coupon-applies").value = coupon ? coupon.appliesTo : "all";
+  document.getElementById("coupon-courseids").value = coupon && coupon.courseIds ? coupon.courseIds.join(", ") : "";
+  document.getElementById("coupon-lessonids").value = coupon && coupon.lessonIds ? coupon.lessonIds.join(", ") : "";
+
+  // Prefill datetime-local: format YYYY-MM-DDTHH:MM
+  if (coupon && coupon.expiresAt > 0) {
+    const d = new Date(coupon.expiresAt);
+    const pad = n => String(n).padStart(2, "0");
+    document.getElementById("coupon-expires").value =
+      `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } else {
+    document.getElementById("coupon-expires").value = "";
+  }
+
+  document.getElementById("coupon-max").value = coupon ? (coupon.maxUses || "") : "";
+  document.getElementById("btn-save-coupon").textContent = coupon ? "💾 Cập nhật" : "Lưu Coupon";
   document.getElementById("modal-coupon").classList.add("active");
 }
 
 async function saveCouponForm() {
-  const code = document.getElementById("coupon-code").value.trim().toUpperCase();
-  if (!code) { flashMessage("Nhập mã coupon", "error"); return; }
   const discountValue = parseInt(document.getElementById("coupon-value").value) || 0;
   if (discountValue <= 0) { flashMessage("Giá trị giảm phải > 0", "error"); return; }
 
@@ -1094,7 +1121,6 @@ async function saveCouponForm() {
   const lessonIdsRaw = document.getElementById("coupon-lessonids").value.trim();
 
   const data = {
-    code,
     discountType: document.getElementById("coupon-type").value,
     discountValue,
     appliesTo: document.getElementById("coupon-applies").value,
@@ -1105,11 +1131,41 @@ async function saveCouponForm() {
   };
 
   try {
-    await createCoupon(data);
-    flashMessage("✓ Đã tạo coupon " + code, "success");
+    if (editingCouponId) {
+      await updateCoupon(editingCouponId, data);
+      flashMessage("✓ Đã cập nhật coupon", "success");
+    } else {
+      const code = document.getElementById("coupon-code").value.trim().toUpperCase();
+      if (!code) { flashMessage("Nhập mã coupon", "error"); return; }
+      data.code = code;
+      await createCoupon(data);
+      flashMessage("✓ Đã tạo coupon " + code, "success");
+    }
     document.getElementById("modal-coupon").classList.remove("active");
     await loadCoupons();
   } catch (err) {
     flashMessage("Lỗi: " + err.message, "error");
   }
+}
+
+function formatExpireLabel(expiresAt) {
+  if (!expiresAt || expiresAt <= 0) return '<span style="color:var(--text-mute)">Không hết hạn</span>';
+  const now = Date.now();
+  const diff = expiresAt - now;
+  const d = new Date(expiresAt);
+  const pad = n => String(n).padStart(2, "0");
+  const dateStr = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+  if (diff < 0) {
+    return `<div style="font-size:12px"><div>${dateStr}</div><div style="color:#ef4444;font-weight:700">⏰ Đã hết hạn</div></div>`;
+  }
+  const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+  const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  let remain = "";
+  if (days > 7) remain = `Còn ${days} ngày`;
+  else if (days > 0) remain = `Còn ${days}d ${hours}h`;
+  else if (hours > 0) remain = `Còn ${hours}h`;
+  else remain = "Sắp hết hạn";
+  const color = days < 3 ? "#fbbf24" : "#4ade80";
+  return `<div style="font-size:12px"><div>${dateStr}</div><div style="color:${color};font-weight:600">${remain}</div></div>`;
 }
