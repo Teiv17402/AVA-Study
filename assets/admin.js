@@ -234,6 +234,62 @@ function setupModals() {
     });
   }
 
+  // AI Quiz Generator button
+  const aiGenBtn = document.getElementById("btn-ai-gen-quiz");
+  if (aiGenBtn) {
+    aiGenBtn.addEventListener("click", async () => {
+      const transcript = document.getElementById("ai-quiz-transcript").value.trim();
+      const numQ = parseInt(document.getElementById("ai-quiz-num").value) || 15;
+      const status = document.getElementById("ai-quiz-status");
+      const lessonTitle = document.getElementById("lesson-title").value.trim();
+      const lessonDesc = document.getElementById("lesson-desc").value.trim();
+
+      if (transcript.length < 50) {
+        status.textContent = "⚠️ Transcript quá ngắn";
+        status.style.color = "#ef4444";
+        return;
+      }
+      aiGenBtn.disabled = true;
+      aiGenBtn.textContent = "⏳ Đang sinh...";
+      status.textContent = "Gemini đang viết quiz...";
+      status.style.color = "var(--text-mute)";
+
+      try {
+        const { supabase } = await import("./firebase.js");
+        const session = (await supabase.auth.getSession()).data.session;
+        if (!session) throw new Error("Chưa đăng nhập");
+
+        const r = await fetch("/api/gen-quiz", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + session.access_token
+          },
+          body: JSON.stringify({
+            transcript, numQuestions: numQ,
+            lessonTitle, lessonDescription: lessonDesc
+          })
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || "Lỗi sinh quiz");
+
+        // Append generated questions to existing quiz list
+        const existing = collectQuizFromForm();
+        const merged = existing.concat(data.questions);
+        renderQuizQuestions(merged);
+
+        status.textContent = `✓ Đã sinh ${data.total} câu (yêu cầu ${data.requested}). Review + edit + Lưu nhé.`;
+        status.style.color = "#4ade80";
+      } catch (err) {
+        status.textContent = "✗ Lỗi: " + err.message;
+        status.style.color = "#ef4444";
+      } finally {
+        aiGenBtn.disabled = false;
+        aiGenBtn.textContent = "🤖 Sinh quiz";
+      }
+    });
+  }
+
   // Coupon buttons
   const newCpBtn = document.getElementById("btn-new-coupon");
   if (newCpBtn) newCpBtn.addEventListener("click", () => openCouponModal());
