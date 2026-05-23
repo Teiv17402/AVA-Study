@@ -17,6 +17,8 @@ import {
   recordViolation,
   checkBanned,
   saveQuizScore,
+  validateCoupon,
+  incrementCouponUsage,
   buildVietQrUrl,
   BANK_CONFIG,
   isAdmin
@@ -597,6 +599,14 @@ async function showPaymentModal(lesson, price) {
           <div class="payment-row highlight"><span>Số tiền:</span> <strong>${formatVnd(price)}</strong></div>
           <div class="payment-row highlight"><span>Nội dung CK:</span> <strong>${escapeHtml(payment.transferContent)}</strong></div>
         </div>
+        <div class="coupon-block">
+          <label>🎟️ Mã coupon (tùy chọn)</label>
+          <div class="coupon-input-row">
+            <input type="text" id="coupon-input-lesson" placeholder="Nhập mã giảm giá..." style="text-transform:uppercase" />
+            <button class="btn btn-secondary btn-sm" id="btn-apply-coupon-lesson">Áp dụng</button>
+          </div>
+          <div id="coupon-result-lesson" class="coupon-result"></div>
+        </div>
         <p class="payment-note">
           ⚠️ <strong>Quan trọng:</strong> Nhập <strong>đúng nội dung CK</strong> ở trên để admin biết bạn thanh toán bài nào.
           Sau khi chuyển khoản xong, bấm nút bên dưới để gửi yêu cầu duyệt.
@@ -610,6 +620,9 @@ async function showPaymentModal(lesson, price) {
   `;
   document.body.appendChild(modal);
 
+  let currentPrice = price;
+  let appliedCoupon = null;
+
   modal.querySelectorAll("[data-close-payment]").forEach(el => {
     el.addEventListener("click", () => modal.remove());
   });
@@ -617,7 +630,43 @@ async function showPaymentModal(lesson, price) {
     if (e.target === modal) modal.remove();
   });
 
-  document.getElementById("btn-confirm-paid").addEventListener("click", () => {
+  // Coupon apply
+  document.getElementById("btn-apply-coupon-lesson").addEventListener("click", async () => {
+    const code = document.getElementById("coupon-input-lesson").value.trim();
+    const result = document.getElementById("coupon-result-lesson");
+    if (!code) { result.innerHTML = ""; return; }
+    result.innerHTML = '<span style="color:var(--text-mute);font-size:12px">Đang kiểm tra...</span>';
+    try {
+      const res = await validateCoupon(code, "lesson", lesson.id, price);
+      if (!res.valid) {
+        result.innerHTML = `<span class="coupon-err">✗ ${res.error}</span>`;
+        appliedCoupon = null;
+        currentPrice = price;
+        updateQRPrice(price, payment.transferContent);
+        return;
+      }
+      appliedCoupon = res;
+      currentPrice = res.finalPrice;
+      result.innerHTML = `<span class="coupon-ok">✓ Áp dụng <strong>${res.code}</strong> — Giảm <strong>${formatVnd(res.discountAmount)}</strong> · Còn lại: <strong style="color:#4ade80">${formatVnd(res.finalPrice)}</strong></span>`;
+      updateQRPrice(res.finalPrice, payment.transferContent);
+    } catch (err) {
+      result.innerHTML = `<span class="coupon-err">Lỗi: ${err.message}</span>`;
+    }
+  });
+
+  function updateQRPrice(amt, content) {
+    const newQrUrl = buildVietQrUrl(amt, content);
+    const img = modal.querySelector(".payment-qr");
+    if (img) img.src = newQrUrl;
+    const priceRow = modal.querySelector(".payment-row.highlight strong");
+    if (priceRow) priceRow.textContent = formatVnd(amt);
+  }
+
+  document.getElementById("btn-confirm-paid").addEventListener("click", async () => {
+    // If coupon applied, increment usage
+    if (appliedCoupon) {
+      try { await incrementCouponUsage(appliedCoupon.couponId); } catch (e) {}
+    }
     modal.remove();
     flashMessage("✓ Đã gửi yêu cầu! Đang chờ admin duyệt...", "success");
     setTimeout(() => renderVipPaymentNotice(lesson), 800);
@@ -748,6 +797,14 @@ async function showCoursePaymentModal(course, price) {
           <div class="payment-row highlight"><span>Nội dung CK:</span> <strong>${escapeHtml(payment.transferContent)}</strong></div>
           <div class="payment-row"><span>Bạn nhận được:</span> <strong style="color:var(--accent)">${totalLessons} bài học</strong></div>
         </div>
+        <div class="coupon-block">
+          <label>🎟️ Mã coupon (tùy chọn)</label>
+          <div class="coupon-input-row">
+            <input type="text" id="coupon-input-course" placeholder="Nhập mã giảm giá..." style="text-transform:uppercase" />
+            <button class="btn btn-secondary btn-sm" id="btn-apply-coupon-course">Áp dụng</button>
+          </div>
+          <div id="coupon-result-course" class="coupon-result"></div>
+        </div>
         <p class="payment-note">
           ⚠️ <strong>Quan trọng:</strong> Nhập <strong>đúng nội dung CK</strong> ở trên (bắt đầu bằng <code>AVAK</code>) để admin biết bạn mua khóa nào.
         </p>
@@ -760,6 +817,8 @@ async function showCoursePaymentModal(course, price) {
   `;
   document.body.appendChild(modal);
 
+  let appliedCouponC = null;
+
   modal.querySelectorAll("[data-close-payment]").forEach(el => {
     el.addEventListener("click", () => modal.remove());
   });
@@ -767,7 +826,37 @@ async function showCoursePaymentModal(course, price) {
     if (e.target === modal) modal.remove();
   });
 
-  document.getElementById("btn-confirm-paid").addEventListener("click", () => {
+  document.getElementById("btn-apply-coupon-course").addEventListener("click", async () => {
+    const code = document.getElementById("coupon-input-course").value.trim();
+    const result = document.getElementById("coupon-result-course");
+    if (!code) { result.innerHTML = ""; return; }
+    result.innerHTML = '<span style="color:var(--text-mute);font-size:12px">Đang kiểm tra...</span>';
+    try {
+      const res = await validateCoupon(code, "course", course.id, price);
+      if (!res.valid) {
+        result.innerHTML = `<span class="coupon-err">✗ ${res.error}</span>`;
+        appliedCouponC = null;
+        const img = modal.querySelector(".payment-qr");
+        if (img) img.src = buildVietQrUrl(price, payment.transferContent);
+        const priceEl = modal.querySelector(".payment-row.highlight strong");
+        if (priceEl) priceEl.textContent = formatVnd(price);
+        return;
+      }
+      appliedCouponC = res;
+      result.innerHTML = `<span class="coupon-ok">✓ Áp dụng <strong>${res.code}</strong> — Giảm <strong>${formatVnd(res.discountAmount)}</strong> · Còn lại: <strong style="color:#4ade80">${formatVnd(res.finalPrice)}</strong></span>`;
+      const img = modal.querySelector(".payment-qr");
+      if (img) img.src = buildVietQrUrl(res.finalPrice, payment.transferContent);
+      const priceEl = modal.querySelector(".payment-row.highlight strong");
+      if (priceEl) priceEl.textContent = formatVnd(res.finalPrice);
+    } catch (err) {
+      result.innerHTML = `<span class="coupon-err">Lỗi: ${err.message}</span>`;
+    }
+  });
+
+  document.getElementById("btn-confirm-paid").addEventListener("click", async () => {
+    if (appliedCouponC) {
+      try { await incrementCouponUsage(appliedCouponC.couponId); } catch (e) {}
+    }
     modal.remove();
     flashMessage("✓ Đã gửi yêu cầu mua khóa! Đang chờ admin duyệt...", "success");
     setTimeout(() => renderCourseVipPaymentNotice(course, currentLessons[currentLessonIndex]), 800);
