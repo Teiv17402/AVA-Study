@@ -15,6 +15,8 @@ import {
   approvePayment,
   approveCoursePayment,
   rejectPayment,
+  markPaymentAsFraud,
+  verifyAutoApproved,
   BANK_CONFIG
 } from "./firebase.js";
 import {
@@ -314,11 +316,13 @@ async function saveLesson() {
 async function loadUsers() {
   const c = document.getElementById("users-container");
   try {
-    const [users, allProgress, payments] = await Promise.all([
+    const [users, allProgress, allPays] = await Promise.all([
       fetchAllUsers(),
       fetchAllProgress(),
-      fetchPendingPayments()
+      fetchAllPayments()
     ]);
+    // Pending + auto_approved (cần admin verify) — show in same dashboard
+    const payments = allPays.filter(p => p.status === "pending" || p.status === "auto_approved");
 
     if (!users.length) {
       c.innerHTML = `<p style="color:var(--text-mute)">Chưa có user nào đăng nhập.</p>`;
@@ -384,17 +388,36 @@ async function loadUsers() {
             : payments.map(p => {
                 const created = p.createdAt ? new Date(p.createdAt.seconds * 1000).toLocaleString("vi-VN") : "—";
                 const isCourse = p.type === "course";
+                const isAutoApproved = p.status === "auto_approved";
                 const typeBadge = isCourse
                   ? `<span class="payment-type-badge course">👑 KHÓA</span>`
                   : `<span class="payment-type-badge lesson">📖 BÀI</span>`;
+                const autoBadge = isAutoApproved ? `<span class="status-badge warn" style="margin-left:6px">⚡ TỰ DUYỆT — cần đối chiếu</span>` : "";
                 const target = isCourse
                   ? `Khóa: <strong>${escapeHtml(p.courseTitle || "—")}</strong> <em style="color:var(--text-mute)">(toàn bộ bài)</em>`
                   : `Khóa: <strong>${escapeHtml(p.courseTitle || "—")}</strong> · Bài: <strong>${escapeHtml(p.lessonTitle || "—")}</strong>`;
+                const actions = isAutoApproved
+                  ? `<button class="btn btn-primary btn-sm" data-payment-action="verify"
+                        data-pid="${escapeHtml(p.id)}">✓ Xác nhận đúng</button>
+                      <button class="btn btn-danger btn-sm" data-payment-action="fraud"
+                        data-pid="${escapeHtml(p.id)}"
+                        data-uid="${escapeHtml(p.userId)}"
+                        data-type="${isCourse ? 'course' : 'lesson'}"
+                        data-course="${escapeHtml(p.courseId || '')}"
+                        data-lesson="${escapeHtml(p.lessonId || '')}">⚠️ Báo gian lận</button>`
+                  : `<button class="btn btn-primary btn-sm" data-payment-action="approve"
+                        data-pid="${escapeHtml(p.id)}"
+                        data-uid="${escapeHtml(p.userId)}"
+                        data-type="${isCourse ? 'course' : 'lesson'}"
+                        data-course="${escapeHtml(p.courseId || '')}"
+                        data-lesson="${escapeHtml(p.lessonId || '')}">✓ Duyệt</button>
+                      <button class="btn btn-danger btn-sm" data-payment-action="reject"
+                        data-pid="${escapeHtml(p.id)}">✗ Từ chối</button>`;
                 return `
-                  <div class="payment-row-admin">
+                  <div class="payment-row-admin ${isAutoApproved ? 'auto-approved' : ''}">
                     <div class="info">
                       <div class="name">
-                        ${typeBadge}
+                        ${typeBadge}${autoBadge}
                         ${escapeHtml(p.userEmail || "—")}
                         <span class="payment-amount">${formatVnd(p.amount)}</span>
                       </div>
@@ -403,16 +426,7 @@ async function loadUsers() {
                         Nội dung CK: <code>${escapeHtml(p.transferContent)}</code> · ${created}
                       </div>
                     </div>
-                    <div class="payment-actions">
-                      <button class="btn btn-primary btn-sm" data-payment-action="approve"
-                        data-pid="${escapeHtml(p.id)}"
-                        data-uid="${escapeHtml(p.userId)}"
-                        data-type="${isCourse ? 'course' : 'lesson'}"
-                        data-course="${escapeHtml(p.courseId || '')}"
-                        data-lesson="${escapeHtml(p.lessonId || '')}">✓ Duyệt</button>
-                      <button class="btn btn-danger btn-sm" data-payment-action="reject"
-                        data-pid="${escapeHtml(p.id)}">✗ Từ chối</button>
-                    </div>
+                    <div class="payment-actions">${actions}</div>
                   </div>
                 `;
               }).join("")}
@@ -472,6 +486,17 @@ async function loadUsers() {
               await approvePayment(pid, uid, lessonId, currentUser.uid);
               flashMessage("✓ Đã duyệt! User có thể xem bài VIP.", "success");
             }
+          } else if (action === "verify") {
+            await verifyAutoApproved(pid, currentUser.uid);
+            flashMessage("✓ Đã xác nhận. Đơn này đã được đối chiếu với sao kê.", "success");
+          } else if (action === "fraud") {
+            if (!confirm("⚠️ Báo gian lận sẽ THU HỒI quyền xem bài/khóa của user này. Tiếp tục?")) {
+              btn.disabled = false;
+              btn.textContent = "⚠️ Báo gian lận";
+              return;
+            }
+            await markPaymentAsFraud(pid, uid, lessonId, courseId, type, currentUser.uid);
+            flashMessage("⚠️ Đã báo gian lận + thu hồi quyền xem.", "info");
           } else {
             await rejectPayment(pid, currentUser.uid);
             flashMessage("Đã từ chối thanh toán.", "info");
