@@ -214,6 +214,16 @@ function setupModals() {
   });
   document.getElementById("btn-save-course").addEventListener("click", saveCourse);
   document.getElementById("btn-save-lesson").addEventListener("click", saveLesson);
+
+  // Bind quiz add button
+  const addQBtn = document.getElementById("btn-add-question");
+  if (addQBtn) {
+    addQBtn.addEventListener("click", () => {
+      const current = collectQuizFromForm();
+      current.push({ q: "", opts: ["", "", "", ""], correct: 0 });
+      renderQuizQuestions(current);
+    });
+  }
 }
 
 function openCourseModal(course = null) {
@@ -275,7 +285,69 @@ function openLessonModal(courseId, lessonIdx) {
   const priceInput = document.getElementById("lesson-price");
   if (vipCheckbox) vipCheckbox.checked = !!(lesson && lesson.isVip);
   if (priceInput) priceInput.value = (lesson && lesson.price) ? lesson.price : "";
+
+  // Render quiz questions
+  const quiz = (lesson && lesson.quiz) || [];
+  renderQuizQuestions(quiz);
+
   document.getElementById("modal-lesson").classList.add("active");
+}
+
+function renderQuizQuestions(questions) {
+  const container = document.getElementById("quiz-questions");
+  if (!container) return;
+  const count = document.getElementById("quiz-count");
+  if (count) count.textContent = `${questions.length} câu`;
+
+  if (!questions.length) {
+    container.innerHTML = `<p style="color:var(--text-mute);font-style:italic;padding:14px;text-align:center">Chưa có câu hỏi. Bấm "+ Thêm câu hỏi" để bắt đầu.</p>`;
+    return;
+  }
+
+  container.innerHTML = questions.map((q, i) => `
+    <div class="quiz-q-row" data-qidx="${i}">
+      <div class="quiz-q-header">
+        <span class="quiz-q-num">Câu ${i + 1}</span>
+        <button type="button" class="btn-icon-x" data-remove-q="${i}" title="Xóa câu">×</button>
+      </div>
+      <input type="text" class="quiz-q-text" data-q-text="${i}" placeholder="Nội dung câu hỏi..." value="${escapeAttr(q.q || "")}" />
+      ${[0,1,2,3].map(j => `
+        <label class="quiz-opt-row">
+          <input type="radio" name="correct-${i}" data-correct="${i}" value="${j}" ${q.correct === j ? "checked" : ""} />
+          <input type="text" class="quiz-opt-text" data-q-opt="${i}-${j}" placeholder="Đáp án ${String.fromCharCode(65+j)}" value="${escapeAttr((q.opts && q.opts[j]) || "")}" />
+        </label>
+      `).join("")}
+      <div class="quiz-q-hint">Tick chọn đáp án ĐÚNG</div>
+    </div>
+  `).join("");
+
+  // Bind remove buttons
+  container.querySelectorAll("[data-remove-q]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.removeQ);
+      const current = collectQuizFromForm();
+      current.splice(idx, 1);
+      renderQuizQuestions(current);
+    });
+  });
+}
+
+function escapeAttr(s) {
+  return String(s || "").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+function collectQuizFromForm() {
+  const container = document.getElementById("quiz-questions");
+  if (!container) return [];
+  const rows = container.querySelectorAll(".quiz-q-row");
+  return Array.from(rows).map(row => {
+    const i = parseInt(row.dataset.qidx);
+    const text = row.querySelector(`[data-q-text="${i}"]`)?.value || "";
+    const opts = [0,1,2,3].map(j => row.querySelector(`[data-q-opt="${i}-${j}"]`)?.value || "");
+    const correctRadio = row.querySelector(`[data-correct="${i}"]:checked`);
+    const correct = correctRadio ? parseInt(correctRadio.value) : 0;
+    return { q: text.trim(), opts: opts.map(o => o.trim()), correct };
+  }).filter(q => q.q.length > 0); // skip empty questions
 }
 
 async function saveLesson() {
@@ -292,17 +364,19 @@ async function saveLesson() {
   const course = courses.find(c => c.id === editingLesson.courseId);
   const lessons = (course.lessons || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
 
+  const quiz = collectQuizFromForm();
+
   if (editingLesson.lessonIndex !== null) {
     const existing = lessons[editingLesson.lessonIndex];
     lessons[editingLesson.lessonIndex] = {
       ...existing,
-      title, driveFileId: driveId, duration, description, isVip, price
+      title, driveFileId: driveId, duration, description, isVip, price, quiz
     };
   } else {
     const newId = "lesson-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7);
     lessons.push({
       id: newId, title, driveFileId: driveId, duration, description,
-      isVip, price, order: lessons.length
+      isVip, price, quiz, order: lessons.length
     });
   }
 
