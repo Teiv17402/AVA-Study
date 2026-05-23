@@ -706,3 +706,42 @@ export async function revokeUserPaidAccess(userId, type, targetId) {
   const { error } = await supabase.from('user_progress').update(patch).eq('user_id', userId);
   if (error) throw error;
 }
+
+
+// ============================================
+// QUIZ SOLUTIONS (admin only) + server-side submit
+// ============================================
+export async function saveQuizSolutions(lessonId, solutions) {
+  // Upsert to lesson_quiz_solutions table (admin RLS only)
+  const { error } = await supabase
+    .from('lesson_quiz_solutions')
+    .upsert({ lesson_id: lessonId, solutions, updated_at: new Date().toISOString() }, { onConflict: 'lesson_id' });
+  if (error) throw error;
+}
+
+export async function fetchQuizSolutions(lessonId) {
+  const { data, error } = await supabase
+    .from('lesson_quiz_solutions')
+    .select('solutions')
+    .eq('lesson_id', lessonId).maybeSingle();
+  if (error) throw error;
+  return data?.solutions || [];
+}
+
+/** Submit quiz answers to server for validation */
+export async function submitQuizAnswers(lessonId, answers, durationMs) {
+  const session = (await supabase.auth.getSession()).data.session;
+  if (!session) throw new Error('Chưa đăng nhập');
+
+  const r = await fetch('/api/quiz-submit', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + session.access_token
+    },
+    body: JSON.stringify({ lesson_id: lessonId, answers, duration_ms: durationMs || 0 })
+  });
+  const json = await r.json();
+  if (!r.ok) throw new Error(json.error || 'Lỗi gửi bài quiz');
+  return json;
+}
