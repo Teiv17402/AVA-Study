@@ -688,3 +688,21 @@ export async function incrementCouponUsage(couponId) {
   if (!data) return;
   await supabase.from('coupons').update({ used_count: (data.used_count || 0) + 1 }).eq('id', couponId);
 }
+
+
+// ============================================
+// REVOKE VIP — admin xóa quyền xem bài/khóa của user
+// ============================================
+export async function revokeUserPaidAccess(userId, type, targetId) {
+  const cur = await fetchUserProgress(userId);
+  const patch = { last_update: new Date().toISOString() };
+  if (type === 'course' && targetId) {
+    patch.paid_courses = (cur.paidCourses || []).filter(id => id !== targetId);
+  } else if (type === 'lesson' && targetId) {
+    patch.paid_lessons = (cur.paidLessons || []).filter(id => id !== targetId);
+  } else {
+    throw new Error('Type không hợp lệ');
+  }
+  const { error } = await supabase.from('user_progress').update(patch).eq('user_id', userId);
+  if (error) throw error;
+}
