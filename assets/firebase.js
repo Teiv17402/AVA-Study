@@ -525,3 +525,165 @@ export async function verifyAutoApproved(paymentId, adminUid) {
     approvedBy: adminUid
   });
 }
+
+// ============================================
+// F3: VIOLATION SYSTEM (vi phạm timer 24h)
+// ============================================
+export const VIOLATION_BAN_DAYS = [7, 30]; // L1: 7d, L2: 30d, L3: notify admin
+
+/** Tự động ghi nhận vi phạm khi user load bài và bị expired */
+export async function recordViolation(userId, userEmail, userName, courseId, courseTitle, lessonId, lessonTitle) {
+  const progRef = doc(db, "userProgress", userId);
+  const snap = await getDoc(progRef);
+  const data = snap.exists() ? snap.data() : {};
+  const violations = data.violations || [];
+  const alreadyRecorded = violations.some(v => v.lessonId === lessonId);
+  if (alreadyRecorded) return { count: violations.length, banUntil: data.bannedUntil || 0, alreadyRecorded: true };
+
+  violations.push({
+    at: Date.now(),
+    courseId, courseTitle, lessonId, lessonTitle
+  });
+  const count = violations.length;
+
+  let bannedUntil = data.bannedUntil || 0;
+  const now = Date.now();
+  if (count === 1) bannedUntil = now + VIOLATION_BAN_DAYS[0] * 24 * 60 * 60 * 1000;
+  else if (count === 2) bannedUntil = now + VIOLATION_BAN_DAYS[1] * 24 * 60 * 60 * 1000;
+
+  await setDoc(progRef, {
+    violations, bannedUntil, lastUpdate: serverTimestamp()
+  }, { merge: true });
+
+  // Lần ≥3: tạo notification cho admin
+  if (count >= 3) {
+    await addDoc(collection(db, "adminNotifications"), {
+      type: "repeat_violator",
+      severity: "high",
+      userId, userEmail, userName,
+      courseId, courseTitle, lessonId, lessonTitle,
+      violationCount: count,
+      message: `User ${userName || userEmail} đã vi phạm ${count} lần. Cần nhắc trên cộng đồng.`,
+      read: false,
+      createdAt: serverTimestamp()
+    });
+  }
+
+  return { count, bannedUntil, alreadyRecorded: false };
+}
+
+/** Check user bị ban chưa */
+export function checkBanned(progress) {
+  const bannedUntil = (progress && progress.bannedUntil) || 0;
+  if (bannedUntil > Date.now()) {
+    return {
+      isBanned: true,
+      until: bannedUntil,
+      daysLeft: Math.ceil((bannedUntil - Date.now()) / (24 * 60 * 60 * 1000))
+    };
+  }
+  return { isBanned: false };
+}
+
+/** Admin: lấy list user bị ban */
+export async function fetchBannedUsers() {
+  const snap = await getDocs(collection(db, "userProgress"));
+  const now = Date.now();
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(p => (p.bannedUntil || 0) > now);
+}
+
+/** Admin: lấy notifications chưa đọc */
+export async function fetchAdminNotifications() {
+  const snap = await getDocs(query(collection(db, "adminNotifications"), where("read", "==", false)));
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  return items;
+}
+
+/** Admin: mark notification đã đọc */
+export async function markNotificationRead(notifId) {
+  await updateDoc(doc(db, "adminNotifications", notifId), { read: true, readAt: serverTimestamp() });
+}
+
+/** Admin: gỡ ban thủ công */
+export async function unbanUser(userId) {
+  await setDoc(doc(db, "userProgress", userId), {
+    bannedUntil: 0,
+    lastUpdate: serverTimestamp()
+  }, { merge: true });
+}
+
+// ============================================
+// F6: LEADERBOARD / SCORING
+// ============================================
+/** Tính điểm 1 user từ progress + courses */
+export function calculateScore(progress, courses) {
+  if (!progress) return { total: 0, monthly: 0, breakdown: {} };
+  const completed = progress.completed || [];
+  const paidCourses = progress.paidCourses || [];
+  const violations = progress.violations || [];
+  const quizScores = progress.quizScores || {};
+
+  let score = 0;
+  let monthlyScore = 0;
+  const now = new Date();
+  const startMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+  // 10 điểm / bài hoàn thành
+  score += completed.length * 10;
+
+  // 100 điểm / khóa hoàn thành (mọi bài trong khóa đều completed)
+  const courseDone = courses.filter(c => {
+    const ids = (c.lessons || []).map(l => l.id);
+    return ids.length > 0 && ids.every(id => completed.includes(id));
+  });
+  score += courseDone.length * 100;
+
+  // Quiz bonus: +20 nếu quiz score ≥95%
+  Object.values(quizScores).forEach(s => {
+    if (s >= 95) score += 20;
+  });
+
+  // Penalty -10 mỗi vi phạm
+  score -= violations.length * 10;
+
+  // Monthly: only count completions in current month (best-effort via unlockedAt timestamps)
+  const monthCompletions = completed.filter(id => {
+    const u = (progress.unlockedAt || {})[id];
+    return u && u >= startMonth;
+  });
+  monthlyScore = monthCompletions.length * 10 - violations.filter(v => v.at >= startMonth).length * 10;
+
+  return {
+    total: Math.max(0, score),
+    monthly: Math.max(0, monthlyScore),
+    breakdown: {
+      lessonsCompleted: completed.length,
+      coursesCompleted: courseDone.length,
+      quizBonuses: Object.values(quizScores).filter(s => s >= 95).length,
+      violations: violations.length
+    }
+  };
+}
+
+/** Lấy leaderboard — return [{user, progress, score}] sorted by total */
+export async function fetchLeaderboard(courses) {
+  const [usersSnap, progSnap] = await Promise.all([
+    getDocs(collection(db, "users")),
+    getDocs(collection(db, "userProgress"))
+  ]);
+  const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const progMap = {};
+  progSnap.docs.forEach(d => { progMap[d.id] = d.data(); });
+
+  return users
+    .filter(u => u.role !== "admin")
+    .map(u => {
+      const prog = progMap[u.id];
+      const score = calculateScore(prog, courses);
+      return { user: u, progress: prog, score };
+    })
+    .sort((a, b) => b.score.total - a.score.total);
+}
