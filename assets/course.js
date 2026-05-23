@@ -464,24 +464,10 @@ async function showPaymentModal(lesson, price) {
     if (e.target === modal) modal.remove();
   });
 
-  document.getElementById("btn-confirm-paid").addEventListener("click", async () => {
-    const confirmBtn = document.getElementById("btn-confirm-paid");
-    confirmBtn.disabled = true;
-    confirmBtn.textContent = "⏳ Đang duyệt...";
-    try {
-      await selfApprovePayment(payment.id, currentUser.uid, lesson.id);
-      // Update local progress
-      const updated = await fetchUserProgress(currentUser.uid);
-      userProgress = updated;
-      modal.remove();
-      flashMessage("✓ Đã thanh toán thành công! Bài VIP đã mở khóa.", "success");
-      // Reload lesson with new access
-      setTimeout(() => loadLesson(currentLessonIndex), 600);
-    } catch (err) {
-      flashMessage("Lỗi: " + err.message + " — Liên hệ admin nếu cần.", "error");
-      confirmBtn.disabled = false;
-      confirmBtn.textContent = "✅ Tôi đã thanh toán";
-    }
+  document.getElementById("btn-confirm-paid").addEventListener("click", () => {
+    modal.remove();
+    flashMessage("✓ Đã gửi yêu cầu! Đang chờ admin duyệt...", "success");
+    setTimeout(() => renderVipPaymentNotice(lesson), 800);
   });
 }
 
@@ -616,42 +602,56 @@ async function showCoursePaymentModal(course, price) {
     if (e.target === modal) modal.remove();
   });
 
-  document.getElementById("btn-confirm-paid").addEventListener("click", async () => {
-    const confirmBtn = document.getElementById("btn-confirm-paid");
-    confirmBtn.disabled = true;
-    confirmBtn.textContent = "⏳ Đang duyệt...";
-    try {
-      await selfApproveCoursePayment(payment.id, currentUser.uid, course.id);
-      const updated = await fetchUserProgress(currentUser.uid);
-      userProgress = updated;
-      modal.remove();
-      flashMessage("✓ Thanh toán thành công! Toàn bộ " + (course.lessons || []).length + " bài đã mở.", "success");
-      setTimeout(() => loadLesson(currentLessonIndex), 600);
-    } catch (err) {
-      flashMessage("Lỗi: " + err.message + " — Liên hệ admin nếu cần.", "error");
-      confirmBtn.disabled = false;
-      confirmBtn.textContent = "✅ Tôi đã thanh toán";
-    }
+  document.getElementById("btn-confirm-paid").addEventListener("click", () => {
+    modal.remove();
+    flashMessage("✓ Đã gửi yêu cầu mua khóa! Đang chờ admin duyệt...", "success");
+    setTimeout(() => renderCourseVipPaymentNotice(course, currentLessons[currentLessonIndex]), 800);
   });
 }
 
 function renderBannedScreen(ban) {
   const until = new Date(ban.until).toLocaleString("vi-VN");
-  document.getElementById("course-layout").innerHTML = `
-    <div class="banned-screen">
-      <div class="banned-icon">⛔</div>
-      <h1>Tài khoản đang bị khóa</h1>
-      <p class="banned-subtitle">Bạn không thể truy cập bài học do vi phạm cam kết học tập (quá 24h chưa hoàn thành bài đã mở).</p>
-      <div class="banned-info">
-        <div><strong>Còn lại:</strong> <span style="color:#fbbf24">${ban.daysLeft} ngày</span></div>
-        <div><strong>Hết hạn khóa:</strong> ${until}</div>
+  showLockOverlay({
+    title: "Tài khoản đang bị khóa",
+    subtitle: `Bạn vi phạm cam kết học tập (quá 24h chưa hoàn thành bài). Còn lại <strong style="color:#fbbf24">${ban.daysLeft} ngày</strong>.`,
+    hint: `Hết hạn lúc: ${until}`,
+    actions: [
+      { label: "← Về trang chủ", href: "home.html", primary: false },
+      { label: "🏆 Xem bảng xếp hạng", href: "leaderboard.html", primary: true }
+    ]
+  });
+}
+
+// ============================================
+// LOCKSCREEN OVERLAY (full-page mờ + icon ổ khóa lớn)
+// ============================================
+function showLockOverlay({ title, subtitle, hint, actions }) {
+  // Remove existing overlay if any
+  const old = document.getElementById("lock-overlay");
+  if (old) old.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "lock-overlay";
+  overlay.className = "lock-overlay";
+  overlay.innerHTML = `
+    <div class="lock-overlay-inner">
+      <div class="lock-icon-big">
+        <svg viewBox="0 0 64 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16 36V22C16 13.16 23.16 6 32 6C40.84 6 48 13.16 48 22V36" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+          <rect x="8" y="36" width="48" height="38" rx="6" stroke="currentColor" stroke-width="5" fill="none"/>
+          <circle cx="32" cy="52" r="4" fill="currentColor"/>
+          <path d="M32 56v8" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+        </svg>
       </div>
-      <p style="margin-top:24px;color:var(--text-mute);font-size:13px">
-        Trong thời gian này, bạn vẫn có thể duyệt trang chủ và xem điểm xếp hạng nhưng không xem được nội dung bài học.
-      </p>
-      <a href="home.html" class="btn btn-secondary" style="margin-top:20px">← Về trang chủ</a>
+      <h1 class="lock-title">${title}</h1>
+      <p class="lock-subtitle">${subtitle}</p>
+      ${hint ? `<p class="lock-hint">${hint}</p>` : ""}
+      <div class="lock-actions">
+        ${actions.map(a => `<a href="${a.href}" class="btn ${a.primary ? 'btn-primary' : 'btn-secondary'}">${a.label}</a>`).join("")}
+      </div>
     </div>
   `;
+  document.body.appendChild(overlay);
 }
 
 function renderExpiredNotice(lesson) {
