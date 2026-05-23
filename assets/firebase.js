@@ -463,3 +463,65 @@ export async function rejectPayment(paymentId, adminUid) {
     approvedBy: adminUid
   });
 }
+
+/** USER tự auto-duyệt bài VIP — gọi khi user bấm "Tôi đã thanh toán" */
+export async function selfApprovePayment(paymentId, userId, lessonId) {
+  await updateDoc(doc(db, "payments", paymentId), {
+    status: "auto_approved",
+    autoApprovedAt: serverTimestamp()
+  });
+  const progRef = doc(db, "userProgress", userId);
+  const snap = await getDoc(progRef);
+  const data = snap.exists() ? snap.data() : {};
+  const paidLessons = data.paidLessons || [];
+  if (!paidLessons.includes(lessonId)) paidLessons.push(lessonId);
+  await setDoc(progRef, {
+    paidLessons,
+    lastUpdate: serverTimestamp()
+  }, { merge: true });
+}
+
+/** USER tự auto-duyệt cả KHÓA */
+export async function selfApproveCoursePayment(paymentId, userId, courseId) {
+  await updateDoc(doc(db, "payments", paymentId), {
+    status: "auto_approved",
+    autoApprovedAt: serverTimestamp()
+  });
+  const progRef = doc(db, "userProgress", userId);
+  const snap = await getDoc(progRef);
+  const data = snap.exists() ? snap.data() : {};
+  const paidCourses = data.paidCourses || [];
+  if (!paidCourses.includes(courseId)) paidCourses.push(courseId);
+  await setDoc(progRef, {
+    paidCourses,
+    lastUpdate: serverTimestamp()
+  }, { merge: true });
+}
+
+/** ADMIN báo gian lận: revoke quyền + đổi status fraud */
+export async function markPaymentAsFraud(paymentId, userId, lessonId, courseId, type, adminUid) {
+  await updateDoc(doc(db, "payments", paymentId), {
+    status: "fraud",
+    fraudAt: serverTimestamp(),
+    fraudBy: adminUid
+  });
+  const progRef = doc(db, "userProgress", userId);
+  const snap = await getDoc(progRef);
+  const data = snap.exists() ? snap.data() : {};
+  if (type === "course" && courseId) {
+    const paidCourses = (data.paidCourses || []).filter(id => id !== courseId);
+    await setDoc(progRef, { paidCourses, lastUpdate: serverTimestamp() }, { merge: true });
+  } else if (lessonId) {
+    const paidLessons = (data.paidLessons || []).filter(id => id !== lessonId);
+    await setDoc(progRef, { paidLessons, lastUpdate: serverTimestamp() }, { merge: true });
+  }
+}
+
+/** ADMIN verify auto-approved payment (sau khi đối chiếu với sao kê) */
+export async function verifyAutoApproved(paymentId, adminUid) {
+  await updateDoc(doc(db, "payments", paymentId), {
+    status: "approved",
+    approvedAt: serverTimestamp(),
+    approvedBy: adminUid
+  });
+}
