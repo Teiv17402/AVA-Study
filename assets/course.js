@@ -12,6 +12,8 @@ import {
   fetchMyPaymentForLesson,
   createCoursePayment,
   fetchMyPaymentForCourse,
+  selfApprovePayment,
+  selfApproveCoursePayment,
   buildVietQrUrl,
   BANK_CONFIG,
   isAdmin
@@ -270,9 +272,15 @@ function loadLesson(index) {
 
   if (videoTimerId) clearInterval(videoTimerId);
   videoElapsed = 0;
-  canCompleteAt = Math.max(10, Math.floor((lesson.duration || 60) * 0.8));
+  canCompleteAt = Math.max(10, Math.floor((lesson.duration || 60) * 0.85));
   updateTimerUI();
   videoTimerId = setInterval(() => {
+    // Pause counter when user switches tab / minimizes / clicks outside (Drive iframe lost focus)
+    if (document.hidden || !document.hasFocus()) {
+      updatePausedHint(true);
+      return;
+    }
+    updatePausedHint(false);
     videoElapsed++;
     updateTimerUI();
   }, 1000);
@@ -424,11 +432,24 @@ async function showPaymentModal(lesson, price) {
     if (e.target === modal) modal.remove();
   });
 
-  document.getElementById("btn-confirm-paid").addEventListener("click", () => {
-    modal.remove();
-    flashMessage("✓ Đã gửi yêu cầu! Đang chờ admin duyệt...", "success");
-    // Reload lesson to show "pending" state
-    setTimeout(() => renderVipPaymentNotice(lesson), 800);
+  document.getElementById("btn-confirm-paid").addEventListener("click", async () => {
+    const confirmBtn = document.getElementById("btn-confirm-paid");
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "⏳ Đang duyệt...";
+    try {
+      await selfApprovePayment(payment.id, currentUser.uid, lesson.id);
+      // Update local progress
+      const updated = await fetchUserProgress(currentUser.uid);
+      userProgress = updated;
+      modal.remove();
+      flashMessage("✓ Đã thanh toán thành công! Bài VIP đã mở khóa.", "success");
+      // Reload lesson with new access
+      setTimeout(() => loadLesson(currentLessonIndex), 600);
+    } catch (err) {
+      flashMessage("Lỗi: " + err.message + " — Liên hệ admin nếu cần.", "error");
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "✅ Tôi đã thanh toán";
+    }
   });
 }
 
@@ -563,10 +584,22 @@ async function showCoursePaymentModal(course, price) {
     if (e.target === modal) modal.remove();
   });
 
-  document.getElementById("btn-confirm-paid").addEventListener("click", () => {
-    modal.remove();
-    flashMessage("✓ Đã gửi yêu cầu mua khóa! Đang chờ admin duyệt...", "success");
-    setTimeout(() => renderCourseVipPaymentNotice(course, currentLessons[currentLessonIndex]), 800);
+  document.getElementById("btn-confirm-paid").addEventListener("click", async () => {
+    const confirmBtn = document.getElementById("btn-confirm-paid");
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "⏳ Đang duyệt...";
+    try {
+      await selfApproveCoursePayment(payment.id, currentUser.uid, course.id);
+      const updated = await fetchUserProgress(currentUser.uid);
+      userProgress = updated;
+      modal.remove();
+      flashMessage("✓ Thanh toán thành công! Toàn bộ " + (course.lessons || []).length + " bài đã mở.", "success");
+      setTimeout(() => loadLesson(currentLessonIndex), 600);
+    } catch (err) {
+      flashMessage("Lỗi: " + err.message + " — Liên hệ admin nếu cần.", "error");
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "✅ Tôi đã thanh toán";
+    }
   });
 }
 
@@ -597,6 +630,24 @@ function renderExpiredNotice(lesson) {
 }
 
 const MANUAL_OVERRIDE_AFTER = 30;
+
+function updatePausedHint(isPaused) {
+  let hint = document.getElementById("timer-paused-hint");
+  if (!hint) {
+    const timerInfo = document.getElementById("timer-info");
+    if (!timerInfo) return;
+    hint = document.createElement("div");
+    hint.id = "timer-paused-hint";
+    hint.className = "timer-paused-hint";
+    timerInfo.parentNode.insertBefore(hint, timerInfo.nextSibling);
+  }
+  if (isPaused) {
+    hint.style.display = "block";
+    hint.textContent = "⏸ Đang tạm dừng đếm — bạn đang ở tab khác hoặc cửa sổ khác. Quay lại trang này để tiếp tục đếm.";
+  } else {
+    hint.style.display = "none";
+  }
+}
 
 function updateTimerUI() {
   const lesson = currentLessons[currentLessonIndex];
