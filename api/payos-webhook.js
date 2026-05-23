@@ -56,24 +56,29 @@ export default async function handler(req) {
   try { body = await req.json(); } catch (e) {
     return new Response('Invalid JSON', { status: 400 });
   }
+  console.log('[payos webhook] received body:', JSON.stringify(body));
 
   const { data, signature } = body || {};
   if (!data) {
-    return new Response(JSON.stringify({ ok: true, msg: 'no data' }), { headers: { 'Content-Type': 'application/json' }});
+    return new Response(JSON.stringify({ ok: true, msg: 'no data', body }), { headers: { 'Content-Type': 'application/json' }});
   }
 
   const verified = await verifyPayosSignature(data, signature || '', CKKEY);
+  console.log('[payos webhook] signature verified:', verified);
   if (!verified) {
-    return new Response(JSON.stringify({ error: 'Invalid signature', received: signature }), {
-      status: 401, headers: { 'Content-Type': 'application/json' }
+    // For debugging — return data fields so we can see what Payos sent
+    return new Response(JSON.stringify({ ok: true, msg: 'sig invalid — but accepting for debug', data, fields: Object.keys(data) }), {
+      status: 200, headers: { 'Content-Type': 'application/json' }
     });
   }
 
-  const desc = (data.description || data.content || '').toUpperCase();
-  const amount = parseInt(data.amount || 0);
+  // Try multiple field names that Payos might use
+  const desc = (data.description || data.content || data.transferContent || data.transactionContent || data.remark || '').toString().toUpperCase();
+  const amount = parseInt(data.amount || data.amountIn || data.transferAmount || 0);
+  console.log('[payos webhook] desc:', desc, 'amount:', amount, 'all fields:', Object.keys(data));
   const codeMatch = desc.match(/AVAK?[A-Z0-9]{11}/);
   if (!codeMatch) {
-    return new Response(JSON.stringify({ ok: true, msg: 'no AVA code', desc }), { headers: { 'Content-Type': 'application/json' }});
+    return new Response(JSON.stringify({ ok: true, msg: 'no AVA code', desc, fields: Object.keys(data), data }), { headers: { 'Content-Type': 'application/json' }});
   }
   const transferContent = codeMatch[0];
 
