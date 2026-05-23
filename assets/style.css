@@ -2451,3 +2451,24 @@ textarea { resize: vertical; min-height: 80px; }
 .coupon-err {
   color: #ef4444;
 }
+
+
+/* Fix: select dropdown options invisible (white on white) */
+select option {
+  background: #1a1a1a;
+  color: #fff;
+}
+select option:checked {
+  background: #d4af6e;
+  color: #000;
+}
+
+/* Quiz option letter prefix */
+.quiz-opt-letter {
+  display: inline-block;
+  min-width: 22px;
+  font-weight: 700;
+  color: #d4af6e;
+  font-size: 13px;
+  text-align: center;
+}
