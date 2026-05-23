@@ -1,36 +1,32 @@
 // ============================================
-// LOGIN PAGE LOGIC
+// LOGIN PAGE — Supabase OAuth redirect flow
 // ============================================
 import {
-  auth,
-  googleProvider,
-  signInWithPopup,
-  onAuthStateChanged,
+  signInWithGoogle,
+  waitForAuth,
   ensureUserDoc
 } from "./firebase.js";
 
-// Nếu đã đăng nhập thì redirect về home luôn
-onAuthStateChanged(auth, async (user) => {
+// Nếu đã có session → redirect về home luôn
+(async () => {
+  const user = await waitForAuth();
   if (user) {
     await ensureUserDoc(user);
     location.href = "home.html";
   }
-});
+})();
 
 const btn = document.getElementById("btn-google");
 const btnText = document.getElementById("btn-google-text");
 
 btn.addEventListener("click", async () => {
   btn.disabled = true;
-  btnText.textContent = "Đang đăng nhập...";
+  btnText.textContent = "Đang chuyển hướng...";
   try {
-    const result = await signInWithPopup(auth, googleProvider);
-    await ensureUserDoc(result.user);
-    location.href = "home.html";
+    await signInWithGoogle();
   } catch (err) {
     btn.disabled = false;
     btnText.textContent = "Đăng nhập bằng Google";
-    if (err.code === "auth/popup-closed-by-user") return;
-    alert("Lỗi đăng nhập: " + (err.message || err.code));
+    alert("Lỗi đăng nhập: " + (err.message || err.code || err));
   }
 });
