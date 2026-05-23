@@ -502,6 +502,7 @@ async function renderVipPaymentNotice(lesson) {
 
   if (existingPayment && existingPayment.status === 'pending') {
     descEl.innerHTML = renderPendingPayment(existingPayment, lesson, price);
+    bindPaymentButton(lesson, price);
   } else if (existingPayment && existingPayment.status === 'rejected') {
     descEl.innerHTML = renderPaymentForm(lesson, price, true);
     bindPaymentButton(lesson, price);
@@ -706,6 +707,7 @@ async function renderCourseVipPaymentNotice(course, lesson) {
 
   if (existingPayment && existingPayment.status === 'pending') {
     descEl.innerHTML = renderCoursePendingPayment(existingPayment, course, price);
+    bindCoursePaymentButton(course, price);
   } else if (existingPayment && existingPayment.status === 'rejected') {
     descEl.innerHTML = renderCoursePaymentForm(course, price, true);
     bindCoursePaymentButton(course, price);
