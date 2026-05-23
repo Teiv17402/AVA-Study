@@ -116,7 +116,13 @@ export default async function handler(req) {
       category = 'long_gone';
     }
 
-    if (!category) { skipped.push({ id: u.user_id, reason: 'not_inactive' }); continue; }
+    if (!category) {
+      skipped.push({
+        id: u.user_id, email: u.email, reason: 'not_inactive',
+        daysSinceCreated, daysSinceLogin, completed: completedCount,
+        hasLogin: !!u.last_login
+      }); continue;
+    }
 
     const ctx = { daysAgo: Math.max(daysSinceCreated, daysSinceLogin), completed: completedCount };
     const html = tmpl(category, u, ctx);
