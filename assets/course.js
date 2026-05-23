@@ -16,6 +16,7 @@ import {
   selfApproveCoursePayment,
   recordViolation,
   checkBanned,
+  saveQuizScore,
   buildVietQrUrl,
   BANK_CONFIG,
   isAdmin
@@ -322,7 +323,146 @@ function loadLesson(index) {
   const nextLesson = currentLessons[index + 1];
   document.getElementById("btn-next").disabled = !nextLesson || !completed.includes(lesson.id);
 
+  // QUIZ section
+  renderQuizSection(lesson);
+
   renderSidebar();
+}
+
+/* ============================================
+   QUIZ UI (user-side) — shuffle, validate, score
+   ============================================ */
+function shuffleArray(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function renderQuizSection(lesson) {
+  // Remove any existing quiz
+  const existing = document.getElementById("quiz-section");
+  if (existing) existing.remove();
+
+  const quiz = lesson.quiz || [];
+  if (!quiz.length) return; // no quiz for this lesson
+
+  const isDone = (userProgress.completed || []).includes(lesson.id);
+  const bestScore = (userProgress.quizScores || {})[lesson.id] || 0;
+
+  // Shuffle questions and each question's options
+  const shuffled = shuffleArray(quiz).map(q => {
+    const opts = (q.opts || []).map((text, origIdx) => ({ text, origIdx }));
+    const shuffledOpts = shuffleArray(opts);
+    return { q: q.q, opts: shuffledOpts, correctOrigIdx: q.correct };
+  });
+
+  // Insert quiz right below the video card
+  const section = document.createElement("div");
+  section.id = "quiz-section";
+  section.className = "quiz-section";
+  section.innerHTML = `
+    <div class="quiz-header">
+      <h3>📝 Quiz — ${quiz.length} câu hỏi</h3>
+      <div class="quiz-subtitle">
+        Cần đạt <strong>≥90%</strong> để hoàn thành bài.
+        ${bestScore > 0 ? `Lần tốt nhất: <strong style="color:${bestScore >= 90 ? '#4ade80' : '#fbbf24'}">${bestScore}%</strong>` : ""}
+        ${isDone ? '<span class="quiz-passed-badge">✓ Đã pass</span>' : ""}
+      </div>
+    </div>
+    <form id="quiz-form" class="quiz-form">
+      ${shuffled.map((q, i) => `
+        <div class="quiz-q-user" data-qi="${i}" data-correct-orig="${q.correctOrigIdx}">
+          <div class="quiz-q-text">Câu ${i + 1}: ${escapeHtml(q.q)}</div>
+          ${q.opts.map((opt, j) => `
+            <label class="quiz-opt-user">
+              <input type="radio" name="qu-${i}" value="${opt.origIdx}" />
+              <span>${escapeHtml(opt.text)}</span>
+            </label>
+          `).join("")}
+        </div>
+      `).join("")}
+      <button type="submit" class="btn btn-primary quiz-submit">📤 Nộp bài</button>
+      <div id="quiz-result"></div>
+    </form>
+  `;
+
+  // Append below main content
+  const mainContent = document.querySelector(".main-content") || document.getElementById("course-layout");
+  if (mainContent) mainContent.appendChild(section);
+
+  // Handle submit
+  document.getElementById("quiz-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await handleQuizSubmit(lesson, shuffled);
+  });
+}
+
+async function handleQuizSubmit(lesson, shuffled) {
+  const form = document.getElementById("quiz-form");
+  const result = document.getElementById("quiz-result");
+
+  let correctCount = 0;
+  const total = shuffled.length;
+  shuffled.forEach((q, i) => {
+    const row = form.querySelector(`[data-qi="${i}"]`);
+    const selected = form.querySelector(`input[name="qu-${i}"]:checked`);
+    if (!selected) {
+      row.classList.add("quiz-q-wrong");
+      return;
+    }
+    const selectedOrigIdx = parseInt(selected.value);
+    if (selectedOrigIdx === q.correctOrigIdx) {
+      row.classList.add("quiz-q-correct");
+      row.classList.remove("quiz-q-wrong");
+      correctCount++;
+    } else {
+      row.classList.add("quiz-q-wrong");
+      row.classList.remove("quiz-q-correct");
+    }
+  });
+
+  const score = Math.round((correctCount / total) * 100);
+  const passed = score >= 90;
+
+  // Save to Firestore
+  try {
+    await saveQuizScore(currentUser.uid, lesson.id, score);
+  } catch (e) {
+    console.warn("Lỗi lưu điểm quiz:", e);
+  }
+
+  // Update local progress
+  userProgress.quizScores = userProgress.quizScores || {};
+  if (!userProgress.quizScores[lesson.id] || score > userProgress.quizScores[lesson.id]) {
+    userProgress.quizScores[lesson.id] = score;
+  }
+
+  result.innerHTML = `
+    <div class="quiz-result-card ${passed ? 'passed' : 'failed'}">
+      <div class="quiz-result-icon">${passed ? '🎉' : '😔'}</div>
+      <div class="quiz-result-score">${correctCount}/${total} (${score}%)</div>
+      <div class="quiz-result-msg">
+        ${passed
+          ? 'Tuyệt vời! Bạn đã pass quiz. Bấm "✓ Hoàn thành" bên trên để hoàn tất bài.'
+          : 'Chưa đủ 90%. Hãy xem lại các câu màu đỏ và làm lại.'}
+      </div>
+      ${!passed ? '<button type="button" class="btn btn-primary" id="quiz-retry">↻ Làm lại</button>' : ""}
+    </div>
+  `;
+
+  if (!passed) {
+    document.getElementById("quiz-retry").addEventListener("click", () => renderQuizSection(lesson));
+  } else {
+    // Enable Hoàn thành button if not already done
+    const btnDone = document.getElementById("btn-done");
+    if (btnDone && !btnDone.dataset.passed) {
+      btnDone.dataset.passed = "1";
+      btnDone.disabled = (videoElapsed < canCompleteAt);
+    }
+  }
 }
 
 async function renderVipPaymentNotice(lesson) {
@@ -782,10 +922,21 @@ function updateTimerUI() {
     ? `<div style="margin-top:6px;font-size:12px;color:var(--accent)">⏱ Còn ${formatRemaining(ms)} trước khi bài này tự động khóa</div>`
     : "";
 
+  const hasQuiz = (lesson.quiz || []).length > 0;
+  const quizScore = (userProgress.quizScores || {})[lesson.id] || 0;
+  const quizPassed = !hasQuiz || quizScore >= 90;
+
   const ready = videoElapsed >= canCompleteAt;
   if (ready) {
+    if (!quizPassed) {
+      timerEl.classList.add("ready");
+      timerEl.innerHTML = `<span class="timer-icon">📝</span><span>Đã đủ thời lượng. Làm quiz bên dưới (cần ≥90%) để hoàn thành bài.${quizScore > 0 ? ` Điểm tốt nhất hiện tại: <strong>${quizScore}%</strong>` : ""}${expiryWarning}</span>`;
+      btnDone.disabled = true;
+      btnDone.textContent = "📝 Cần pass quiz";
+      return;
+    }
     timerEl.classList.add("ready");
-    timerEl.innerHTML = `<span class="timer-icon">🎉</span><span>Đã đủ thời lượng. Bấm "Hoàn thành bài" để mở bài tiếp theo!${expiryWarning}</span>`;
+    timerEl.innerHTML = `<span class="timer-icon">🎉</span><span>Đã đủ điều kiện. Bấm "Hoàn thành bài" để mở bài tiếp theo!${expiryWarning}</span>`;
     btnDone.disabled = false;
     btnDone.textContent = "Hoàn thành bài học";
     return;
