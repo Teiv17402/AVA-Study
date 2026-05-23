@@ -194,6 +194,25 @@
             </div>
             <button type="button" class="btn btn-primary btn-sm" id="btn-add-question">+ Thêm câu hỏi</button>
           </div>
+
+          <!-- AI Quiz Generator -->
+          <div class="ai-quiz-gen">
+            <details>
+              <summary>🤖 AI sinh quiz tự động (Gemini) — tiết kiệm 80% time</summary>
+              <div style="padding:12px 0">
+                <label style="display:block;margin-bottom:6px">Dán transcript video / nội dung bài học:</label>
+                <textarea id="ai-quiz-transcript" placeholder="Dán transcript video, ghi chú bài học, hoặc tài liệu... (tối thiểu 200 từ để chất lượng tốt)" rows="6" style="width:100%;padding:10px;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:8px;color:#fff;font-size:13px;resize:vertical"></textarea>
+                <div style="display:flex;gap:10px;align-items:center;margin-top:10px">
+                  <label style="font-size:13px">Số câu hỏi:</label>
+                  <input type="number" id="ai-quiz-num" value="15" min="5" max="25" style="width:80px;padding:6px 10px" />
+                  <button type="button" class="btn btn-primary" id="btn-ai-gen-quiz">🤖 Sinh quiz</button>
+                  <span id="ai-quiz-status" style="font-size:13px;color:var(--text-mute)"></span>
+                </div>
+                <div class="form-help" style="margin-top:8px">AI sẽ sinh quiz + đáp án tự động. Bạn review + edit + lưu. Quiz sinh xong sẽ APPEND vào danh sách bên dưới.</div>
+              </div>
+            </details>
+          </div>
+
           <div id="quiz-questions"></div>
         </div>
       </div>
