@@ -3416,6 +3416,9 @@ select option:checked {
   background: transparent;
   z-index: 5;
   cursor: not-allowed;
+  -webkit-touch-callout: none; /* iOS: chặn long-press menu */
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* Custom fullscreen button (góc dưới phải) */
@@ -3462,4 +3465,46 @@ select option:checked {
 @media (max-width: 768px) {
   .video-corner-blocker { width: 60px; height: 44px; }
   .video-fullscreen-btn { width: 44px; height: 44px; font-size: 20px; }
+}
+
+
+
+/* ===== PSEUDO-FULLSCREEN (CSS-based, work iOS Safari) ===== */
+.video-protect-wrap.pseudo-fs {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  aspect-ratio: unset !important;
+  border-radius: 0 !important;
+  z-index: 99999 !important;
+  background: #000 !important;
+}
+.video-protect-wrap.pseudo-fs .video-fullscreen-btn {
+  width: 48px;
+  height: 48px;
+  font-size: 22px;
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border-color: rgba(255,255,255,0.4);
+  opacity: 1;
+}
+
+/* ===== MOBILE — chặn TOÀN bộ thanh top của Drive iframe ===== */
+@media (max-width: 768px) {
+  .video-corner-blocker {
+    width: 100%;    /* full width chặn cả title + menu + open-external */
+    height: 60px;
+  }
+  /* Khi fullscreen mobile, blocker vẫn che top */
+  .video-protect-wrap.pseudo-fs .video-corner-blocker {
+    height: 72px;
+  }
+}
+
+/* iOS Safari: chặn long-press menu trên iframe vùng video */
+.video-protect-wrap {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
