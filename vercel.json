@@ -11,6 +11,10 @@
     {
       "path": "/api/abandoned-payment",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/telegram-reminder",
+      "schedule": "0 13 * * *"
     }
   ]
 }
