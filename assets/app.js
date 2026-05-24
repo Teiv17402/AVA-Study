@@ -30,22 +30,56 @@ export function renderHeader(user, profile) {
   const page = (location.pathname.split('/').pop() || 'dashboard.html').toLowerCase();
   const isActive = (n) => page === n ? 'active' : '';
 
-  el.innerHTML = `
-    <nav class="header-nav">
+  const navHtml = `
       <a class="btn-header ${isActive('dashboard.html')}" href="dashboard.html" title="Tổng quan">📊 Tổng quan</a>
       <a class="btn-header ${isActive('my-courses.html')}" href="my-courses.html" title="Khóa học của tôi">📚 Khóa của tôi</a>
       <a class="btn-header ${isActive('home.html')}" href="home.html" title="Khám phá khóa học">🔍 Khám phá</a>
       <a class="btn-header ${isActive('leaderboard.html')}" href="leaderboard.html" title="Bảng xếp hạng">🏆 Xếp hạng</a>
       <a class="btn-header ${isActive('settings.html')}" href="settings.html" title="Cài đặt">⚙ Cài đặt</a>
       ${admin ? `<a class="btn-header ${isActive('admin.html')}" href="admin.html" title="Trang quản trị">🛠 Quản trị</a>` : ""}
-    </nav>
+  `;
+
+  el.innerHTML = `
+    <nav class="header-nav">${navHtml}</nav>
     <div class="user-chip" title="${escapeHtml(user.email)}">
       ${avatar}
       <span class="name">${escapeHtml(displayName)}</span>
       ${admin ? `<span class="badge">Admin</span>` : ""}
     </div>
-    <button class="btn-header danger" id="btn-logout">Đăng xuất</button>
+    <button class="btn-header danger desktop-only" id="btn-logout">Đăng xuất</button>
+    <button class="hamburger-btn" id="btn-hamburger" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
   `;
+
+  // Mobile drawer (chỉ render 1 lần)
+  if (!document.getElementById('mobile-drawer')) {
+    const drawer = document.createElement('div');
+    drawer.id = 'mobile-drawer';
+    drawer.className = 'mobile-drawer';
+    drawer.innerHTML = `
+      <div class="mobile-drawer-backdrop" id="drawer-backdrop"></div>
+      <aside class="mobile-drawer-panel">
+        <div class="mobile-drawer-head">
+          <div class="user-chip">${avatar}<span class="name">${escapeHtml(displayName)}</span></div>
+          <button class="mobile-drawer-close" id="drawer-close">×</button>
+        </div>
+        <nav class="mobile-drawer-nav">${navHtml}</nav>
+        <button class="btn btn-danger" id="btn-logout-mobile">🛑 Đăng xuất</button>
+      </aside>
+    `;
+    document.body.appendChild(drawer);
+
+    document.getElementById('btn-hamburger').addEventListener('click', () =>
+      drawer.classList.add('open'));
+    document.getElementById('drawer-close').addEventListener('click', () =>
+      drawer.classList.remove('open'));
+    document.getElementById('drawer-backdrop').addEventListener('click', () =>
+      drawer.classList.remove('open'));
+    document.getElementById('btn-logout-mobile').addEventListener('click', () => {
+      if (confirm("Đăng xuất khỏi tài khoản?")) logout();
+    });
+  }
 
   const btn = document.getElementById("btn-logout");
   if (btn) btn.addEventListener("click", () => {
