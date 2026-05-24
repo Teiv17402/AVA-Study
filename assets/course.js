@@ -12,6 +12,7 @@ import {
   fetchMyPaymentForLesson,
   createCoursePayment,
   fetchMyPaymentForCourse,
+  supabase,
   selfApprovePayment,
   selfApproveCoursePayment,
   recordViolation,
@@ -1099,6 +1100,30 @@ async function completeCurrentLesson(forceOverride = false) {
     // Nếu bài kế tiếp là VIP, KHÔNG set timer (vì user phải pay trước)
     const nextId = (nextLesson && !nextLesson.isVip) ? nextLesson.id : null;
     const result = await markLessonCompleted(currentUser.uid, lesson.id, nextId);
+
+    // ===== AGENT #6: Check if course completed → trigger milestone email =====
+    try {
+      const allLessonIds = currentLessons.map(l => l.id);
+      const newCompleted = result.completed || [];
+      const allDone = allLessonIds.every(id => newCompleted.includes(id));
+      if (allDone) {
+        const sess = (await supabase.auth.getSession()).data.session;
+        if (sess) {
+          fetch('/api/course-completed', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + sess.access_token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ courseId: currentCourse.id })
+          }).then(r => r.json()).then(d => {
+            if (d.ok) {
+              const msg = d.nextSuggested
+                ? `🎉 Hoàn thành khóa! Email upsell gửi với coupon ${d.coupon || ''}`
+                : "🎉 Hoàn thành khóa!";
+              flashMessage(msg, "success");
+            }
+          }).catch(e => console.warn('Milestone trigger:', e));
+        }
+      }
+    } catch (e) { console.warn('Course-completed check:', e); }
     userProgress.completed = result.completed;
     userProgress.unlockedAt = result.unlockedAt;
     updateTimerUI();
