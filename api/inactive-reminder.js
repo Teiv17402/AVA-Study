@@ -159,6 +159,13 @@ export default async function handler(req) {
 
   for (const u of users) {
     if ((u.banned_until || 0) > Date.now()) { skipped.push({ id: u.user_id, reason: 'banned' }); continue; }
+
+    // Phase A: tôn trọng opt-out trong notification_prefs
+    const prefs = u.notification_prefs || {};
+    if (prefs.email_reminders === false) {
+      skipped.push({ id: u.user_id, email: u.email, reason: 'opted_out' }); continue;
+    }
+
     if (u.last_reminder_at && new Date(u.last_reminder_at) > new Date(FIVE_DAYS_AGO)) {
       skipped.push({ id: u.user_id, reason: 'recent_reminder' }); continue;
     }
