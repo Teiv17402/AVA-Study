@@ -73,10 +73,11 @@ export default async function handler(req) {
   const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
   // Fetch data
-  const [payments, users, courses] = await Promise.all([
+  const [payments, users, courses, attempts] = await Promise.all([
     sb('payments?select=*', SBKEY),
     sb('user_progress?select=*', SBKEY),
-    sb('courses?select=id,title,lessons', SBKEY)
+    sb('courses?select=id,title,lessons', SBKEY),
+    sb(`quiz_attempts_log?created_at=gte.${weekAgo.toISOString()}&select=*`, SBKEY)
   ]);
 
   const wkPayments = payments.filter(p => new Date(p.created_at) >= weekAgo);
@@ -112,6 +113,29 @@ export default async function handler(req) {
     return s + wkViols;
   }, 0);
 
+  // ===== CHEAT DETECTION =====
+  const suspiciousAttempts = (attempts || []).filter(a => {
+    // Score 100% in <5 seconds = suspicious
+    if (a.score === 100 && (a.duration_ms || 0) < 5000) return true;
+    // Score 100% in <15s with >5 questions answered
+    if (a.score === 100 && (a.duration_ms || 0) < 15000 && (a.answers?.length || 0) > 5) return true;
+    return false;
+  });
+  const suspiciousByUser = {};
+  suspiciousAttempts.forEach(a => {
+    if (!suspiciousByUser[a.user_id]) suspiciousByUser[a.user_id] = [];
+    suspiciousByUser[a.user_id].push(a);
+  });
+  const cheatSuspects = Object.entries(suspiciousByUser).map(([uid, items]) => {
+    const u = users.find(x => x.user_id === uid);
+    return {
+      email: u?.email || uid,
+      name: u?.display_name || '',
+      count: items.length,
+      examples: items.slice(0, 3).map(a => `Quiz ${a.lesson_id}: ${a.score}% trong ${a.duration_ms}ms`)
+    };
+  }).sort((a, b) => b.count - a.count);
+
   const stats = {
     fromDate: weekAgo.toLocaleDateString('vi-VN'),
     toDate: now.toLocaleDateString('vi-VN'),
@@ -122,7 +146,9 @@ export default async function handler(req) {
     totalUsers: users.filter(u => u.role !== 'admin').length,
     newUsersThisWeek, activeUsersThisWeek, atRiskCount, bannedCount,
     totalCourses: courses.length, topCourses,
-    violationsThisWeek
+    violationsThisWeek,
+    cheatSuspectsCount: cheatSuspects.length,
+    cheatSuspects: cheatSuspects.slice(0, 5)
   };
 
   // AI summary
@@ -155,6 +181,11 @@ export default async function handler(req) {
 <tr><td style="padding:8px 0;color:#666">Vi phạm timer</td><td style="text-align:right">${violationsThisWeek}</td></tr>
 </table>
 ${topCourses.length > 0 ? `<h3 style="color:#d4af6e">🏆 Top khóa</h3><ol>${topCourses.map(c => '<li>' + c.title + ' (' + c.count + ' đơn)</li>').join('')}</ol>` : ''}
+${cheatSuspects.length > 0 ? `<h3 style="color:#ef4444;margin-top:24px">🚨 Nghi vấn gian lận (${cheatSuspects.length} user)</h3>
+<div style="background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:14px">
+${cheatSuspects.slice(0,5).map(c => '<div style="margin:6px 0"><strong style="color:#ef4444">' + (c.name || c.email) + '</strong> — ' + c.count + ' lần đáng ngờ<div style="font-size:12px;color:#666;margin-left:14px">' + c.examples.join('<br>') + '</div></div>').join('')}
+<p style="margin-top:10px;font-size:12px;color:#999">Pattern: score 100% trong &lt;5 giây hoặc &lt;15s với &gt;5 câu. Có thể là cheat qua DevTools hoặc bot.</p>
+</div>` : ''}
 <p style="margin-top:24px;text-align:center"><a href="https://ava-study.vercel.app/admin.html" style="background:#d4af6e;color:#000;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700">Vào Admin Panel</a></p>
 </div>
 <p style="text-align:center;color:#999;font-size:12px;margin-top:16px">AVA Study — báo cáo tự động mỗi sáng thứ 2</p>
