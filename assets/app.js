@@ -33,7 +33,8 @@ export function renderHeader(user, profile) {
   el.innerHTML = `
     <nav class="header-nav">
       <a class="btn-header ${isActive('dashboard.html')}" href="dashboard.html" title="Tổng quan">📊 Tổng quan</a>
-      <a class="btn-header ${isActive('home.html')}" href="home.html" title="Khóa học">📚 Khóa học</a>
+      <a class="btn-header ${isActive('my-courses.html')}" href="my-courses.html" title="Khóa học của tôi">📚 Khóa của tôi</a>
+      <a class="btn-header ${isActive('home.html')}" href="home.html" title="Khám phá khóa học">🔍 Khám phá</a>
       <a class="btn-header ${isActive('leaderboard.html')}" href="leaderboard.html" title="Bảng xếp hạng">🏆 Xếp hạng</a>
       <a class="btn-header ${isActive('settings.html')}" href="settings.html" title="Cài đặt">⚙ Cài đặt</a>
       ${admin ? `<a class="btn-header ${isActive('admin.html')}" href="admin.html" title="Trang quản trị">🛠 Quản trị</a>` : ""}
