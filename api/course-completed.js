@@ -77,6 +77,19 @@ export default async function handler(req) {
     });
   }
 
+  // Phase A: tôn trọng opt-out email_milestones
+  const prefs = prog.notification_prefs || {};
+  if (prefs.email_milestones === false) {
+    // Vẫn mark milestone đã "sent" để không xử lý lại, nhưng không gửi email
+    const updated = [...milestonesSent, courseId];
+    await sb(`user_progress?user_id=eq.${user.id}`, {
+      method: 'PATCH', body: JSON.stringify({ milestones_sent: updated })
+    }, SBKEY);
+    return new Response(JSON.stringify({ ok: true, msg: 'User opted out of milestone emails — skipped' }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
   // Suggest next course: first one user hasn't started
   const courseProgress = c => {
     const ids = (c.lessons || []).map(l => l.id);
