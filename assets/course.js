@@ -295,23 +295,27 @@ function loadLesson(index) {
         <button class="video-fullscreen-btn" id="btn-fullscreen" title="Toàn màn hình" aria-label="Toàn màn hình">⛶</button>
       </div>`;
 
-    // Bind custom fullscreen button (work cả desktop + mobile)
+    // Bind custom fullscreen button — pseudo-fullscreen (CSS-based, work 100% mọi browser)
     const fsBtn = document.getElementById('btn-fullscreen');
     const wrap = document.getElementById('video-protect-wrap');
     if (fsBtn && wrap) {
-      fsBtn.addEventListener('click', () => {
-        const el = wrap;
-        if (document.fullscreenElement || document.webkitFullscreenElement) {
-          (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-        } else {
-          const req = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitEnterFullscreen;
-          if (req) req.call(el).catch(() => {
-            // iOS Safari fallback: tap iframe để fullscreen tự nhiên
-            alert('Để xem toàn màn hình, bấm vào video rồi chọn fullscreen.');
-          });
-        }
+      const toggleFs = () => {
+        const isFs = wrap.classList.toggle('pseudo-fs');
+        fsBtn.textContent = isFs ? '✕' : '⛶';
+        fsBtn.title = isFs ? 'Thoát toàn màn hình' : 'Toàn màn hình';
+        document.body.style.overflow = isFs ? 'hidden' : '';
+      };
+      fsBtn.addEventListener('click', toggleFs);
+
+      // ESC để thoát pseudo-fullscreen
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && wrap.classList.contains('pseudo-fs')) toggleFs();
       });
     }
+
+    // Disable context menu (chống right-click "Save video")
+    const wrapEl = document.getElementById('video-protect-wrap');
+    if (wrapEl) wrapEl.addEventListener('contextmenu', e => e.preventDefault());
   } else {
     videoWrap.innerHTML = `
       <div class="video-placeholder">
