@@ -63,13 +63,13 @@ function normalizeUser(supabaseUser) {
 
 export async function signInWithGoogle() {
   const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
-  const redirectTo = base + 'home.html';
+  const redirectTo = base + 'dashboard.html';
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo }
   });
   if (error) throw error;
-  return data;
+  return data; // Supabase tự navigate browser → code phía sau KHÔNG nên chạy
 }
 
 // Compatibility shim for signInWithPopup(auth, googleProvider) → redirect flow
