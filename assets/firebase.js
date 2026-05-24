@@ -1130,3 +1130,58 @@ export function categorizeMyCourses(courses, progress) {
   }
   return { ongoing, done, vipBought };
 }
+
+
+
+// ============================================
+// PHASE C — TELEGRAM BOT INTEGRATION
+// ============================================
+
+export const TELEGRAM_BOT_USERNAME = 'AVAxTSB_report_bot';
+
+/** Generate 1 link token + insert vào telegram_pending_links. Return URL t.me */
+export async function createTelegramLink(userId) {
+  // Random token 16 chars
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(12)))
+    .map(b => b.toString(36).padStart(2, '0')).join('').slice(0, 16);
+
+  // Cleanup pending cũ của user (tránh dồn)
+  await supabase.from('telegram_pending_links').delete().eq('user_id', userId);
+
+  // Insert new
+  const { error } = await supabase.from('telegram_pending_links').insert([{
+    token, user_id: userId,
+    expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString()
+  }]);
+  if (error) throw error;
+
+  return `https://t.me/${TELEGRAM_BOT_USERNAME}?start=${token}`;
+}
+
+/** Check Telegram status từ user_progress */
+export async function fetchTelegramStatus(userId) {
+  const { data, error } = await supabase
+    .from('user_progress')
+    .select('telegram_chat_id, telegram_username, telegram_linked_at, telegram_last_reminder')
+    .eq('user_id', userId).maybeSingle();
+  if (error) throw error;
+  return {
+    linked: !!(data && data.telegram_chat_id),
+    username: data?.telegram_username,
+    linkedAt: data?.telegram_linked_at,
+    lastReminder: data?.telegram_last_reminder
+  };
+}
+
+/** Unlink Telegram trên web (user vào Settings bấm hủy) */
+export async function unlinkTelegram(userId) {
+  const { error } = await supabase
+    .from('user_progress')
+    .update({
+      telegram_chat_id: null,
+      telegram_username: null,
+      telegram_linked_at: null
+    })
+    .eq('user_id', userId);
+  if (error) throw error;
+}
