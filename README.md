@@ -127,3 +127,5 @@ Rồi publish lại Rules trên Firebase Console.
 
 
 <!-- supabase-migration build trigger 1779560264215 -->
+
+<!-- deploy trigger: 2026-05-24T08:25:44.1176781Z -->
