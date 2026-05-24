@@ -791,7 +791,7 @@ export const DEFAULT_NOTIF_PREFS = {
 export async function fetchUserProfile(userId) {
   const { data, error } = await supabase
     .from('user_progress')
-    .select('user_id, email, display_name, photo_url, phone, bio, custom_name, custom_avatar, notification_prefs, created_at, streak_days, streak_longest, streak_last_date, xp_total')
+    .select('user_id, email, display_name, photo_url, phone, bio, custom_name, custom_avatar, notification_prefs, created_at, streak_days, streak_longest, streak_last_date, xp_total, streak_freezes_available, streak_freezes_used_total, streak_last_freeze_date, streak_week_reset_date')
     .eq('user_id', userId).maybeSingle();
   if (error) throw error;
   if (!data) return null;
@@ -809,7 +809,12 @@ export async function fetchUserProfile(userId) {
     streakDays: data.streak_days || 0,
     streakLongest: data.streak_longest || 0,
     streakLastDate: data.streak_last_date,
-    xpTotal: data.xp_total || 0
+    xpTotal: data.xp_total || 0,
+    // Phase B
+    streakFreezesAvailable: data.streak_freezes_available ?? 1,
+    streakFreezesUsedTotal: data.streak_freezes_used_total || 0,
+    streakLastFreezeDate: data.streak_last_freeze_date,
+    streakWeekResetDate: data.streak_week_reset_date
   };
 }
 
@@ -940,4 +945,188 @@ export async function requestAccountDeletion(userId, userEmail, reason) {
 
   // Logout
   await supabase.auth.signOut();
+}
+
+
+
+// ============================================
+// PHASE B — STREAK FREEZE + SOCIAL PROOF + MY COURSES
+// ============================================
+
+const FREEZE_QUOTA_PER_WEEK = 1; // 1 freeze/tuần cho user thường
+
+/** Helper: tính thứ 2 đầu tuần hiện tại (Mon=1...Sun=0) */
+function getMondayOfWeek(d) {
+  const dd = new Date(d); dd.setHours(0,0,0,0);
+  const day = dd.getDay() || 7;          // Sun=7
+  dd.setDate(dd.getDate() - (day - 1));
+  return dd;
+}
+
+/**
+ * Phase B: Update streak with freeze protection.
+ * - Reset freeze quota mỗi thứ 2
+ * - Nếu user nghỉ đúng 1 ngày VÀ còn freeze → tự dùng freeze, giữ streak
+ * - Nếu nghỉ >1 ngày HOẶC hết freeze → reset streak về 1
+ */
+export async function touchStreakV2(userId) {
+  const cur = await fetchUserProfile(userId);
+  if (!cur) return null;
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayStr = today.toISOString().slice(0,10);
+  const last = cur.streakLastDate || null;
+
+  let newStreak = cur.streakDays || 0;
+  let newLongest = cur.streakLongest || 0;
+  let freezes = cur.streakFreezesAvailable ?? FREEZE_QUOTA_PER_WEEK;
+  let freezesUsedTotal = cur.streakFreezesUsedTotal || 0;
+  let lastFreezeDate = cur.streakLastFreezeDate || null;
+  let weekResetDate = cur.streakWeekResetDate || null;
+  let freezeAppliedNow = false;
+
+  // 1. Reset freeze quota nếu sang tuần mới (thứ 2)
+  const thisMonday = getMondayOfWeek(today).toISOString().slice(0,10);
+  if (weekResetDate !== thisMonday) {
+    freezes = FREEZE_QUOTA_PER_WEEK;
+    weekResetDate = thisMonday;
+  }
+
+  if (last === todayStr) {
+    return {
+      streakDays: newStreak, streakLongest: newLongest,
+      freezesAvailable: freezes, freezeAppliedNow: false, changed: false
+    };
+  }
+
+  if (last) {
+    const lastDate = new Date(last + 'T00:00:00');
+    const diffDays = Math.round((today - lastDate) / (24 * 60 * 60 * 1000));
+    if (diffDays === 1) {
+      newStreak += 1; // liên tiếp
+    } else if (diffDays === 2 && freezes > 0) {
+      // Nghỉ đúng 1 ngày + còn freeze → dùng freeze
+      newStreak += 1;
+      freezes -= 1;
+      freezesUsedTotal += 1;
+      lastFreezeDate = todayStr;
+      freezeAppliedNow = true;
+    } else {
+      // Nghỉ >1 ngày hoặc hết freeze → reset
+      newStreak = 1;
+    }
+  } else {
+    newStreak = 1;
+  }
+  if (newStreak > newLongest) newLongest = newStreak;
+
+  const { error } = await supabase.from('user_progress').update({
+    streak_days: newStreak,
+    streak_longest: newLongest,
+    streak_last_date: todayStr,
+    streak_freezes_available: freezes,
+    streak_freezes_used_total: freezesUsedTotal,
+    streak_last_freeze_date: lastFreezeDate,
+    streak_week_reset_date: weekResetDate,
+    last_update: new Date().toISOString()
+  }).eq('user_id', userId);
+  if (error) console.warn('touchStreakV2:', error);
+
+  return {
+    streakDays: newStreak,
+    streakLongest: newLongest,
+    freezesAvailable: freezes,
+    freezeAppliedNow,
+    changed: true
+  };
+}
+
+/** Anonymize tên: "Nguyễn Văn An" -> "Nguyễn V.A" hoặc "Nguyễn V." */
+export function anonymizeName(fullName) {
+  if (!fullName) return 'Một học viên';
+  const parts = String(fullName).trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0][0] + '***';
+  const first = parts[0];
+  const initial = parts[parts.length - 1][0].toUpperCase();
+  return `${first} ${initial}.`;
+}
+
+/**
+ * Phase B: Social Proof feed
+ * Lấy 20 hoạt động gần đây từ view v_recent_activity.
+ * Trả về items kèm message hiển thị + privacy-safe name.
+ */
+export async function fetchRecentActivity() {
+  const { data, error } = await supabase
+    .from('v_recent_activity').select('*').limit(20);
+  if (error) {
+    console.warn('fetchRecentActivity:', error);
+    return [];
+  }
+  return (data || []).map(row => {
+    const name = anonymizeName(row.display_name || row.email);
+    const eventAt = row.event_at ? new Date(row.event_at) : null;
+    const minsAgo = eventAt ? Math.floor((Date.now() - eventAt.getTime()) / 60000) : 0;
+
+    // Variant message dựa trên data
+    let icon = '📖', text;
+    if (row.total_completed >= 10) {
+      icon = '🎓';
+      text = `${name} đã hoàn thành ${row.total_completed} bài học`;
+    } else if (row.streak_days >= 7) {
+      icon = '🔥';
+      text = `${name} đang giữ chuỗi ${row.streak_days} ngày học`;
+    } else if (row.xp_total >= 200) {
+      const level = Math.floor(row.xp_total / 200) + 1;
+      icon = '⭐';
+      text = `${name} đang ở Level ${level}`;
+    } else if (row.total_completed > 0) {
+      icon = '📖';
+      text = `${name} vừa hoàn thành ${row.total_completed} bài học`;
+    } else {
+      icon = '👋';
+      text = `${name} vừa tham gia AVA Study`;
+    }
+
+    return {
+      userId: row.user_id, icon, text,
+      minsAgo, eventAt
+    };
+  });
+}
+
+/**
+ * Phase B: "Khóa học của tôi"
+ * Filter courses thành 3 nhóm:
+ *  - ongoing: có ít nhất 1 lesson completed/unlocked, chưa xong hết
+ *  - completed: xong tất cả lessons
+ *  - vip_purchased: đã mua khóa VIP nhưng chưa start
+ */
+export function categorizeMyCourses(courses, progress) {
+  const completed = progress.completed || [];
+  const unlockedAt = progress.unlockedAt || {};
+  const paidCourses = progress.paidCourses || [];
+  const paidLessons = progress.paidLessons || [];
+
+  const ongoing = [], done = [], vipBought = [];
+
+  for (const c of courses) {
+    const lessons = c.lessons || [];
+    if (lessons.length === 0) continue;
+
+    const lessonIds = lessons.map(l => l.id);
+    const doneCount = lessonIds.filter(id => completed.includes(id)).length;
+    const hasUnlocked = lessonIds.some(id => unlockedAt[id]);
+    const isOwned = paidCourses.includes(c.id) ||
+                    lessons.some(l => l.isVip && paidLessons.includes(l.id));
+
+    if (doneCount === lessonIds.length) {
+      done.push({ course: c, done: doneCount, total: lessonIds.length });
+    } else if (doneCount > 0 || hasUnlocked) {
+      ongoing.push({ course: c, done: doneCount, total: lessonIds.length });
+    } else if (isOwned) {
+      vipBought.push({ course: c, done: 0, total: lessonIds.length });
+    }
+  }
+  return { ongoing, done, vipBought };
 }
