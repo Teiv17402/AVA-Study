@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Khóa học của tôi — AVA Study</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23ffd60a%22 rx=%2220%22/><text x=%2250%22 y=%2270%22 font-size=%2260%22 text-anchor=%22middle%22 font-family=%22Arial Black%22 fill=%22%23000%22>A</text></svg>" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="dashboard.html" class="logo">
+        <span class="logo-mark">A</span>
+        <span>AVA</span>
+      </a>
+      <div class="header-actions" id="header-actions">
+        <span class="spinner"></span>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="my-courses-header">
+      <h1 class="page-title">📚 <span class="accent">Khóa học của tôi</span></h1>
+      <p class="page-subtitle" id="my-courses-subtitle">Đang tải...</p>
+    </div>
+
+    <div class="my-courses-tabs">
+      <button class="mc-tab active" data-filter="ongoing">📖 Đang học <span class="mc-count" id="count-ongoing">0</span></button>
+      <button class="mc-tab" data-filter="vipBought">👑 VIP đã mua <span class="mc-count" id="count-vip">0</span></button>
+      <button class="mc-tab" data-filter="done">✅ Đã hoàn thành <span class="mc-count" id="count-done">0</span></button>
+    </div>
+
+    <div id="my-courses-grid" class="course-grid">
+      <div class="loading-screen"><div class="spinner"></div><p>Đang tải khóa học...</p></div>
+    </div>
+
+    <div class="my-courses-cta-block" id="cta-explore" style="display:none">
+      <h3>🔍 Khám phá thêm khóa học</h3>
+      <p>Bạn đã đăng ký khóa học nào trên đây. Khám phá các khóa khác?</p>
+      <a href="home.html" class="btn btn-primary">Xem tất cả khóa →</a>
+    </div>
+  </main>
+
+  <footer class="site-footer">AVA Study · Khóa học của bạn</footer>
+
+  <script type="module" src="assets/app.js"></script>
+  <script type="module">
+    import { initMyCoursesPage } from "./assets/my-courses.js";
+    initMyCoursesPage();
+  </script>
+</body>
+</html>
