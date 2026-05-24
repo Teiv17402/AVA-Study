@@ -8,7 +8,10 @@ import {
   updateNotificationPrefs,
   fetchMyPayments,
   requestAccountDeletion,
-  DEFAULT_NOTIF_PREFS
+  DEFAULT_NOTIF_PREFS,
+  createTelegramLink,
+  fetchTelegramStatus,
+  unlinkTelegram
 } from "./firebase.js";
 import { escapeHtml, formatVnd, flashMessage, renderHeader } from "./app.js";
 
@@ -53,6 +56,7 @@ export async function initSettingsPage() {
   bindTabs();
   hydrateProfileTab();
   hydrateNotifTab();
+  hydrateTelegramCard();
   bindSecurityTab();
   loadPaymentsTab();
 }
@@ -334,4 +338,79 @@ function paymentRowHtml(p) {
       <td><code style="font-size:11px">${escapeHtml(p.transferContent || '')}</code></td>
     </tr>
   `;
+}
+
+
+/* =================== PHASE C: TELEGRAM BOT CARD =================== */
+async function hydrateTelegramCard() {
+  const badge      = document.getElementById('telegram-status-badge');
+  const desc       = document.getElementById('telegram-status-desc');
+  const btnLink    = document.getElementById('btn-telegram-link');
+  const btnUnlink  = document.getElementById('btn-telegram-unlink');
+  const linkBlock  = document.getElementById('telegram-link-display');
+  const linkUrl    = document.getElementById('telegram-link-url');
+
+  let status;
+  try {
+    status = await fetchTelegramStatus(CURRENT_USER.uid);
+  } catch (e) { return; }
+
+  function render() {
+    if (status.linked) {
+      badge.textContent = '✓ Đã liên kết';
+      badge.className = 'telegram-badge linked';
+      const since = status.linkedAt
+        ? new Date(status.linkedAt).toLocaleDateString('vi-VN')
+        : '';
+      desc.innerHTML = `Đang nhận nhắc nhở qua Telegram @<strong>${escapeHtml(status.username || '?')}</strong>` +
+                       (since ? ` · Liên kết từ ${since}` : '');
+      btnLink.style.display = 'none';
+      btnUnlink.style.display = 'inline-flex';
+      linkBlock.style.display = 'none';
+    } else {
+      badge.textContent = 'Chưa liên kết';
+      badge.className = 'telegram-badge unlinked';
+      desc.textContent = 'Liên kết Telegram để nhận nhắc nhở học mỗi ngày 20:00.';
+      btnLink.style.display = 'inline-flex';
+      btnUnlink.style.display = 'none';
+    }
+  }
+  render();
+
+  btnLink.addEventListener('click', async () => {
+    btnLink.disabled = true;
+    btnLink.textContent = '⏳ Đang tạo link...';
+    try {
+      const url = await createTelegramLink(CURRENT_USER.uid);
+      linkBlock.style.display = 'block';
+      linkUrl.textContent = url;
+      linkUrl.href = url;
+      // Auto open Telegram trong tab mới
+      window.open(url, '_blank', 'noopener');
+      flashMessage('Đã mở Telegram. Bấm START trong bot để liên kết.', 'success');
+      btnLink.textContent = '🔄 Tạo link mới';
+      btnLink.disabled = false;
+    } catch (err) {
+      flashMessage('Lỗi tạo link: ' + err.message, 'error');
+      btnLink.textContent = '🔗 Liên kết Telegram';
+      btnLink.disabled = false;
+    }
+  });
+
+  btnUnlink.addEventListener('click', async () => {
+    if (!confirm('Hủy liên kết Telegram? Bạn sẽ không nhận nhắc nhở nữa.')) return;
+    btnUnlink.disabled = true;
+    btnUnlink.textContent = '⏳ Đang hủy...';
+    try {
+      await unlinkTelegram(CURRENT_USER.uid);
+      status = { linked: false };
+      render();
+      flashMessage('Đã hủy liên kết Telegram', 'success');
+    } catch (err) {
+      flashMessage('Lỗi hủy: ' + err.message, 'error');
+    } finally {
+      btnUnlink.disabled = false;
+      btnUnlink.textContent = '🛑 Hủy liên kết';
+    }
+  });
 }
