@@ -2987,3 +2987,115 @@ select option:checked {
   .header-nav { display: none; }
   /* Mobile: chỉ giữ Avatar + logout, nav ẩn (user vào dashboard.html sẽ thấy quick-tile) */
 }
+
+
+
+/* ============================================
+   PHASE B — SOCIAL PROOF + FREEZE + MY COURSES
+   ============================================ */
+
+/* Social proof bar (top dashboard) */
+.social-proof-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: linear-gradient(90deg, rgba(74,222,128,0.12), rgba(212,175,110,0.12));
+  border: 1px solid rgba(74,222,128,0.25);
+  border-radius: 50px;
+  padding: 10px 20px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #f4eddf;
+  font-weight: 500;
+  min-height: 40px;
+  overflow: hidden;
+}
+.social-proof-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.sp-icon { font-size: 16px; }
+.sp-time { color: #888; font-weight: 400; font-size: 12px; }
+
+/* Freeze badge */
+.freeze-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(99,179,237,0.15);
+  color: #63b3ed;
+  border-radius: 10px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 4px;
+  cursor: help;
+}
+
+/* My Courses page */
+.my-courses-header { margin: 24px 0 18px 0; }
+.my-courses-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid rgba(212,175,110,0.2);
+  margin-bottom: 24px;
+  overflow-x: auto;
+}
+.mc-tab {
+  background: transparent;
+  border: none;
+  color: #999;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: all .15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.mc-tab:hover { color: #d4af6e; }
+.mc-tab.active {
+  color: #d4af6e;
+  border-bottom-color: #d4af6e;
+}
+.mc-count {
+  background: rgba(212,175,110,0.2);
+  color: #d4af6e;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+.mc-tab.active .mc-count {
+  background: #d4af6e;
+  color: #000;
+}
+
+.my-courses-cta-block {
+  margin-top: 32px;
+  text-align: center;
+  padding: 28px;
+  background: rgba(212,175,110,0.05);
+  border: 1px dashed rgba(212,175,110,0.3);
+  border-radius: 12px;
+}
+.my-courses-cta-block h3 { color: #d4af6e; margin: 0 0 8px; }
+.my-courses-cta-block p { color: #aaa; margin: 0 0 16px; }
+
+/* CTA chữ trong course card (Phase B) */
+.course-cta {
+  text-align: center;
+  background: #d4af6e;
+  color: #000;
+  padding: 8px 0;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  margin-top: 10px;
+}
