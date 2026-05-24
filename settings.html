@@ -90,6 +90,35 @@
 
     <!-- ============ TAB: THÔNG BÁO ============ -->
     <section class="settings-section" id="section-notif">
+
+      <!-- TELEGRAM CARD -->
+      <div class="settings-card telegram-card" style="margin-bottom:18px">
+        <div class="telegram-card-head">
+          <div>
+            <h2 class="settings-card-title">📱 Telegram Bot — Nhắc nhở miễn phí</h2>
+            <p class="settings-card-desc" id="telegram-status-desc">
+              Liên kết Telegram để nhận nhắc nhở học mỗi ngày 20:00.
+            </p>
+          </div>
+          <div id="telegram-status-badge" class="telegram-badge unlinked">Chưa liên kết</div>
+        </div>
+
+        <div id="telegram-actions">
+          <button class="btn btn-primary" id="btn-telegram-link">🔗 Liên kết Telegram</button>
+          <button class="btn btn-danger" id="btn-telegram-unlink" style="display:none">🛑 Hủy liên kết</button>
+        </div>
+
+        <div id="telegram-link-display" style="display:none;margin-top:14px;padding:14px;background:rgba(99,179,237,0.08);border:1px dashed rgba(99,179,237,0.3);border-radius:10px">
+          <div style="font-size:13px;color:#aaa;margin-bottom:8px">📲 Click link bên dưới để mở Telegram + liên kết:</div>
+          <a id="telegram-link-url" href="#" target="_blank" rel="noopener" style="color:#63b3ed;font-weight:600;word-break:break-all">Đang tạo link...</a>
+          <div style="font-size:12px;color:#888;margin-top:8px">Link có hiệu lực 15 phút. Sau khi liên kết xong, refresh trang này để cập nhật.</div>
+        </div>
+
+        <div class="form-help" style="margin-top:12px">
+          Bot sẽ nhắc khi: chuỗi học sắp gãy, bài sắp hết hạn 24h, đơn thanh toán pending, hoặc bạn quên học hôm nay.
+        </div>
+      </div>
+
       <div class="settings-card">
         <h2 class="settings-card-title">Email từ AVA</h2>
         <p class="settings-card-desc">Chọn loại email bạn muốn nhận</p>
