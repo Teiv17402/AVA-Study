@@ -5,25 +5,42 @@ import {
   auth,
   onAuthStateChanged,
   isAdmin,
-  logout
+  logout,
+  fetchUserProfile
 } from "./firebase.js";
 
+/* Cache profile để header không gọi DB nhiều lần */
+let _profileCache = null;
+
 /* ---------- Header user chip ---------- */
-export function renderHeader(user) {
+export function renderHeader(user, profile) {
   const el = document.getElementById("header-actions");
   if (!el || !user) return;
 
+  // Ưu tiên customAvatar/customName từ profile nếu có
+  const displayName = (profile && profile.customName) || user.displayName || user.email;
+  const avatarSrc   = (profile && profile.customAvatar) || user.photoURL;
+
   const admin = isAdmin(user);
-  const avatar = user.photoURL
-    ? `<img src="${escapeHtml(user.photoURL)}" referrerpolicy="no-referrer" alt="" />`
-    : `<div style="width:28px;height:28px;border-radius:50%;background:#d4af6e;color:#000;display:flex;align-items:center;justify-content:center;font-weight:700;">${(user.displayName || user.email || "U")[0].toUpperCase()}</div>`;
+  const avatar = avatarSrc
+    ? `<img src="${escapeHtml(avatarSrc)}" referrerpolicy="no-referrer" alt="" />`
+    : `<div style="width:28px;height:28px;border-radius:50%;background:#d4af6e;color:#000;display:flex;align-items:center;justify-content:center;font-weight:700;">${(displayName || "U")[0].toUpperCase()}</div>`;
+
+  // Highlight nav theo trang hiện tại
+  const page = (location.pathname.split('/').pop() || 'dashboard.html').toLowerCase();
+  const isActive = (n) => page === n ? 'active' : '';
 
   el.innerHTML = `
-    <a class="btn-header" href="leaderboard.html" title="Bảng xếp hạng">🏆 Xếp hạng</a>
-    ${admin ? `<a class="btn-header" href="admin.html" title="Trang quản trị">⚙ Quản trị</a>` : ""}
+    <nav class="header-nav">
+      <a class="btn-header ${isActive('dashboard.html')}" href="dashboard.html" title="Tổng quan">📊 Tổng quan</a>
+      <a class="btn-header ${isActive('home.html')}" href="home.html" title="Khóa học">📚 Khóa học</a>
+      <a class="btn-header ${isActive('leaderboard.html')}" href="leaderboard.html" title="Bảng xếp hạng">🏆 Xếp hạng</a>
+      <a class="btn-header ${isActive('settings.html')}" href="settings.html" title="Cài đặt">⚙ Cài đặt</a>
+      ${admin ? `<a class="btn-header ${isActive('admin.html')}" href="admin.html" title="Trang quản trị">🛠 Quản trị</a>` : ""}
+    </nav>
     <div class="user-chip" title="${escapeHtml(user.email)}">
       ${avatar}
-      <span class="name">${escapeHtml(user.displayName || user.email)}</span>
+      <span class="name">${escapeHtml(displayName)}</span>
       ${admin ? `<span class="badge">Admin</span>` : ""}
     </div>
     <button class="btn-header danger" id="btn-logout">Đăng xuất</button>
@@ -155,6 +172,11 @@ export function getCourseProgress(lessons, completedIds) {
   return { total, done, percent: total ? Math.round((done / total) * 100) : 0 };
 }
 
-onAuthStateChanged(auth, (user) => {
-  if (user) renderHeader(user);
+onAuthStateChanged(auth, async (user) => {
+  if (!user) return;
+  renderHeader(user);                       // Render ngay (avatar Google)
+  try {
+    if (!_profileCache) _profileCache = await fetchUserProfile(user.uid);
+    if (_profileCache) renderHeader(user, _profileCache); // Re-render với customAvatar
+  } catch (e) { /* silent */ }
 });
