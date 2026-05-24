@@ -288,7 +288,30 @@ function loadLesson(index) {
 
   const videoWrap = document.getElementById("video-wrap");
   if (lesson.driveFileId && lesson.driveFileId !== "REPLACE_WITH_GOOGLE_DRIVE_FILE_ID" && lesson.driveFileId.trim()) {
-    videoWrap.innerHTML = `<iframe src="https://drive.google.com/file/d/${encodeURIComponent(lesson.driveFileId)}/preview" allow="autoplay" allowfullscreen></iframe>`;
+    videoWrap.innerHTML = `
+      <div class="video-protect-wrap" id="video-protect-wrap">
+        <iframe id="lesson-iframe" src="https://drive.google.com/file/d/${encodeURIComponent(lesson.driveFileId)}/preview" allow="autoplay" allowfullscreen></iframe>
+        <div class="video-corner-blocker" aria-hidden="true" title="Khóa học bản quyền — vui lòng học trực tiếp trên AVA"></div>
+        <button class="video-fullscreen-btn" id="btn-fullscreen" title="Toàn màn hình" aria-label="Toàn màn hình">⛶</button>
+      </div>`;
+
+    // Bind custom fullscreen button (work cả desktop + mobile)
+    const fsBtn = document.getElementById('btn-fullscreen');
+    const wrap = document.getElementById('video-protect-wrap');
+    if (fsBtn && wrap) {
+      fsBtn.addEventListener('click', () => {
+        const el = wrap;
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+          (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        } else {
+          const req = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitEnterFullscreen;
+          if (req) req.call(el).catch(() => {
+            // iOS Safari fallback: tap iframe để fullscreen tự nhiên
+            alert('Để xem toàn màn hình, bấm vào video rồi chọn fullscreen.');
+          });
+        }
+      });
+    }
   } else {
     videoWrap.innerHTML = `
       <div class="video-placeholder">
