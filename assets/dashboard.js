@@ -9,7 +9,8 @@ import {
   calculateLevel,
   computeXp,
   syncXpCache,
-  touchStreak
+  touchStreakV2,
+  fetchRecentActivity
 } from "./firebase.js";
 import {
   escapeHtml,
@@ -33,9 +34,10 @@ export async function initDashboardPage() {
       fetchCourses()
     ]);
 
-    // Touch streak (max 1 update / day)
-    const streakResult = await touchStreak(user.uid);
+    // Touch streak (Phase B: với freeze protection)
+    const streakResult = await touchStreakV2(user.uid);
     const streakDays = streakResult ? streakResult.streakDays : (profile?.streakDays || 0);
+    const freezes = streakResult ? streakResult.freezesAvailable : (profile?.streakFreezesAvailable ?? 1);
 
     // Compute XP fresh, sync cache nếu khác DB
     const xp = computeXp(progress, courses);
@@ -43,12 +45,15 @@ export async function initDashboardPage() {
       syncXpCache(user.uid, xp); // fire-and-forget
     }
 
-    hydrateStats(progress, courses, streakDays);
+    hydrateStats(progress, courses, streakDays, freezes);
     hydrateLevel(xp);
     hydrateContinue(progress, courses);
     hydrateRecent(courses, progress);
+    hydrateSocialProof(user.uid); // fire-and-forget
 
-    if (streakResult && streakResult.changed && streakDays > 1) {
+    if (streakResult && streakResult.freezeAppliedNow) {
+      flashMessage(`🧊 Đã dùng 1 freeze để giữ chuỗi ${streakDays} ngày! Còn ${freezes} freeze tuần này.`, 'info');
+    } else if (streakResult && streakResult.changed && streakDays > 1) {
       flashMessage(`🔥 Chuỗi ${streakDays} ngày — tuyệt vời!`, 'success');
     }
   } catch (err) {
@@ -57,7 +62,7 @@ export async function initDashboardPage() {
   }
 }
 
-function hydrateStats(progress, courses, streakDays) {
+function hydrateStats(progress, courses, streakDays, freezes) {
   // Khóa đăng ký = số khóa có ít nhất 1 lesson đã unlock hoặc completed
   const completed = progress.completed || [];
   const unlockedAt = progress.unlockedAt || {};
@@ -69,6 +74,21 @@ function hydrateStats(progress, courses, streakDays) {
   document.getElementById('stat-courses').textContent   = startedCourses.length;
   document.getElementById('stat-streak').textContent    = streakDays;
   document.getElementById('stat-completed').textContent = completed.length;
+
+  // Phase B: hiện badge freeze quota
+  const freezeBadge = document.getElementById('freeze-badge');
+  if (freezeBadge) {
+    if ((freezes || 0) > 0) {
+      freezeBadge.style.display = 'inline-flex';
+      freezeBadge.textContent = `🧊 ${freezes} freeze tuần này`;
+      freezeBadge.title = 'Nếu nghỉ 1 ngày, freeze sẽ tự dùng để giữ chuỗi. Reset thứ 2 hàng tuần.';
+    } else {
+      freezeBadge.style.display = 'inline-flex';
+      freezeBadge.textContent = `🧊 Hết freeze`;
+      freezeBadge.style.opacity = '0.5';
+      freezeBadge.title = 'Hết freeze tuần này. Reset vào thứ 2.';
+    }
+  }
 
   const sub = document.getElementById('greet-sub');
   if (streakDays >= 7) sub.textContent = `🔥 Chuỗi ${streakDays} ngày — bạn đang ở phong độ cao!`;
@@ -192,4 +212,52 @@ function hydrateRecent(courses, progress) {
       </a>
     `;
   }).join('');
+}
+
+
+/* ============================================
+   PHASE B — SOCIAL PROOF BAR
+   ============================================ */
+async function hydrateSocialProof(currentUserId) {
+  const bar = document.getElementById('social-proof-bar');
+  if (!bar) return;
+
+  let items;
+  try {
+    items = await fetchRecentActivity();
+  } catch (e) { return; }
+
+  // Loại current user khỏi feed (không tự khoe mình)
+  items = (items || []).filter(it => it.userId !== currentUserId);
+
+  if (!items.length) {
+    bar.style.display = 'none';
+    return;
+  }
+
+  bar.style.display = 'flex';
+  let idx = 0;
+  const inner = bar.querySelector('.social-proof-text');
+  if (!inner) return;
+
+  function renderItem(it) {
+    const ago = it.minsAgo < 60
+      ? `${it.minsAgo}p trước`
+      : `${Math.floor(it.minsAgo / 60)}h trước`;
+    inner.innerHTML = `<span class="sp-icon">${it.icon}</span> ${escapeHtml(it.text)} <span class="sp-time">· ${ago}</span>`;
+    inner.style.opacity = '0';
+    requestAnimationFrame(() => {
+      inner.style.transition = 'opacity .4s ease';
+      inner.style.opacity = '1';
+    });
+  }
+
+  renderItem(items[0]);
+  if (items.length === 1) return;
+
+  setInterval(() => {
+    idx = (idx + 1) % items.length;
+    inner.style.opacity = '0';
+    setTimeout(() => renderItem(items[idx]), 350);
+  }, 5000);
 }
