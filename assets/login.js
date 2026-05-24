@@ -24,13 +24,14 @@ btn.addEventListener("click", async () => {
   btn.disabled = true;
   btnText.textContent = "Đang đăng nhập...";
   try {
-    const result = await signInWithPopup(auth, googleProvider);
-    await ensureUserDoc(result.user);
-    location.href = "dashboard.html";
+    // signInWithPopup → wrapper signInWithGoogle → Supabase tự redirect browser sang Google
+    // Sau khi login Google xong, Supabase callback redirect về dashboard.html
+    // KHÔNG code thêm phía sau — page sẽ navigate đi
+    await signInWithPopup(auth, googleProvider);
   } catch (err) {
     btn.disabled = false;
     btnText.textContent = "Đăng nhập bằng Google";
     if (err.code === "auth/popup-closed-by-user") return;
-    alert("Lỗi đăng nhập: " + (err.message || err.code));
+    alert("Lỗi đăng nhập: " + (err.message || err.code || err));
   }
 });
