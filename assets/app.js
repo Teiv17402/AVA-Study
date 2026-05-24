@@ -52,34 +52,41 @@ export function renderHeader(user, profile) {
     </button>
   `;
 
-  // Mobile drawer (chỉ render 1 lần)
-  if (!document.getElementById('mobile-drawer')) {
-    const drawer = document.createElement('div');
-    drawer.id = 'mobile-drawer';
-    drawer.className = 'mobile-drawer';
-    drawer.innerHTML = `
-      <div class="mobile-drawer-backdrop" id="drawer-backdrop"></div>
-      <aside class="mobile-drawer-panel">
-        <div class="mobile-drawer-head">
-          <div class="user-chip">${avatar}<span class="name">${escapeHtml(displayName)}</span></div>
-          <button class="mobile-drawer-close" id="drawer-close">×</button>
-        </div>
-        <nav class="mobile-drawer-nav">${navHtml}</nav>
-        <button class="btn btn-danger" id="btn-logout-mobile">🛑 Đăng xuất</button>
-      </aside>
-    `;
-    document.body.appendChild(drawer);
+  // Mobile drawer — re-create mỗi lần renderHeader để listener không bị stale
+  const oldDrawer = document.getElementById('mobile-drawer');
+  if (oldDrawer) oldDrawer.remove();
 
-    document.getElementById('btn-hamburger').addEventListener('click', () =>
-      drawer.classList.add('open'));
-    document.getElementById('drawer-close').addEventListener('click', () =>
-      drawer.classList.remove('open'));
-    document.getElementById('drawer-backdrop').addEventListener('click', () =>
-      drawer.classList.remove('open'));
-    document.getElementById('btn-logout-mobile').addEventListener('click', () => {
-      if (confirm("Đăng xuất khỏi tài khoản?")) logout();
-    });
-  }
+  const drawer = document.createElement('div');
+  drawer.id = 'mobile-drawer';
+  drawer.className = 'mobile-drawer';
+  drawer.innerHTML = `
+    <div class="mobile-drawer-backdrop" id="drawer-backdrop"></div>
+    <aside class="mobile-drawer-panel">
+      <div class="mobile-drawer-head">
+        <div class="user-chip">${avatar}<span class="name">${escapeHtml(displayName)}</span></div>
+        <button class="mobile-drawer-close" id="drawer-close">×</button>
+      </div>
+      <nav class="mobile-drawer-nav">${navHtml}</nav>
+      <button class="btn btn-danger" id="btn-logout-mobile">🛑 Đăng xuất</button>
+    </aside>
+  `;
+  document.body.appendChild(drawer);
+
+  // Bind listeners — querySelector for fresh elements
+  const hamBtn = document.getElementById('btn-hamburger');
+  if (hamBtn) hamBtn.addEventListener('click', () => drawer.classList.add('open'));
+  document.getElementById('drawer-close').addEventListener('click', () =>
+    drawer.classList.remove('open'));
+  document.getElementById('drawer-backdrop').addEventListener('click', () =>
+    drawer.classList.remove('open'));
+  document.getElementById('btn-logout-mobile').addEventListener('click', () => {
+    if (confirm("Đăng xuất khỏi tài khoản?")) logout();
+  });
+
+  // Close drawer khi click vào link nav (cho phép navigate mượt)
+  drawer.querySelectorAll('a.btn-header').forEach(a => {
+    a.addEventListener('click', () => drawer.classList.remove('open'));
+  });
 
   const btn = document.getElementById("btn-logout");
   if (btn) btn.addEventListener("click", () => {
