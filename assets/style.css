@@ -3135,3 +3135,251 @@ select option:checked {
   background: rgba(255,255,255,0.08);
   color: #999;
 }
+
+
+
+/* ============================================
+   MOBILE RESPONSIVE PASS (Phase R)
+   Breakpoints: 768px (tablet) · 480px (phone)
+   ============================================ */
+
+/* ----- HAMBURGER + MOBILE DRAWER ----- */
+.hamburger-btn {
+  display: none;
+  background: transparent;
+  border: 1px solid rgba(212,175,110,0.3);
+  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+}
+.hamburger-btn span {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: #d4af6e;
+  border-radius: 1px;
+}
+
+.mobile-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: none;
+}
+.mobile-drawer.open { display: block; }
+.mobile-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  animation: fadeIn .2s ease;
+}
+.mobile-drawer-panel {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 280px;
+  max-width: 80vw;
+  background: #1a1a1a;
+  border-left: 1px solid rgba(212,175,110,0.2);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  animation: slideInRight .25s ease;
+}
+.mobile-drawer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(212,175,110,0.15);
+}
+.mobile-drawer-close {
+  background: transparent;
+  border: none;
+  color: #f4eddf;
+  font-size: 32px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 6px;
+}
+.mobile-drawer-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+.mobile-drawer-nav .btn-header {
+  display: block;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 8px;
+  width: 100%;
+  font-size: 15px;
+}
+.mobile-drawer-nav .btn-header.active {
+  background: rgba(212,175,110,0.15);
+  color: #d4af6e !important;
+}
+
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes slideInRight {
+  from { transform: translateX(100%) } to { transform: translateX(0) }
+}
+
+/* ----- TABLET (≤768px) ----- */
+@media (max-width: 768px) {
+  /* Header */
+  .header-inner { padding: 12px 14px; }
+  .header-nav { display: none !important; }
+  .user-chip .name { display: none; }
+  .user-chip .badge { display: none; }
+  .desktop-only { display: none !important; }
+  .hamburger-btn { display: inline-flex; }
+
+  /* Containers */
+  .container, .dashboard-layout, .settings-layout, .admin-layout {
+    padding: 0 14px;
+  }
+  .page-title { font-size: 22px; }
+  .page-subtitle { font-size: 14px; }
+
+  /* Welcome card */
+  .dash-welcome {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 20px;
+    gap: 14px;
+  }
+  .dash-welcome-right { width: 100%; }
+  .dash-welcome-right .btn { width: 100%; text-align: center; }
+  .dash-greet { font-size: 22px; }
+  .dash-stat-row { gap: 16px; flex-wrap: wrap; }
+  .dash-stat-num { font-size: 22px; }
+
+  /* Level card */
+  .dash-level-card { padding: 16px 18px; }
+  .dash-level-num { font-size: 20px; }
+
+  /* Grid */
+  .dash-grid { grid-template-columns: 1fr; gap: 14px; }
+  .dash-card { padding: 16px; }
+  .recent-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* Course grid */
+  .course-grid { grid-template-columns: 1fr; gap: 12px; }
+  .course-card { width: 100%; }
+
+  /* Settings */
+  .settings-card { padding: 18px; }
+  .settings-tabs { gap: 4px; }
+  .settings-tab { padding: 12px 14px; font-size: 13px; }
+  .form-row { grid-template-columns: 1fr !important; gap: 12px; }
+  .settings-actions { flex-direction: column; }
+  .settings-actions .btn { width: 100%; }
+  .profile-avatar-row { flex-direction: column; align-items: flex-start; }
+  .telegram-card-head { flex-direction: column; align-items: flex-start; }
+  .security-google-row, .danger-row { flex-direction: column; align-items: stretch; gap: 12px; }
+  .security-google-row .btn, .danger-row .btn { width: 100%; text-align: center; }
+
+  /* My courses tabs */
+  .my-courses-tabs { gap: 4px; }
+  .mc-tab { padding: 10px 12px; font-size: 12px; }
+  .mc-count { font-size: 10px; }
+
+  /* Social proof bar */
+  .social-proof-bar { font-size: 12px; padding: 8px 14px; }
+}
+
+@media (max-width: 768px) {
+  /* Course player (course.html) */
+  .course-layout { flex-direction: column !important; }
+  .course-sidebar, .course-main {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .course-video, .course-video iframe, .course-video video {
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 16/9;
+  }
+  .lesson-list { max-height: 280px; overflow-y: auto; }
+
+  /* Admin layout */
+  .admin-tabs { flex-wrap: wrap; gap: 4px; }
+  .admin-tab { padding: 10px 12px; font-size: 13px; flex: 1; min-width: 0; }
+  .admin-card { padding: 16px; }
+  .admin-card-header { flex-direction: column; align-items: stretch; gap: 10px; }
+  .admin-card-header .btn { width: 100%; }
+
+  /* Admin tables: horizontal scroll on parent container */
+  #users-container, #pendings-container, #payments-container,
+  #courses-container, #coupons-container,
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .users-table, .payments-table { min-width: 560px; }
+  table th, table td { padding: 10px 8px !important; font-size: 13px; }
+
+  /* Modal */
+  .modal-overlay { padding: 10px; }
+  .modal {
+    max-width: 95vw !important;
+    max-height: 90vh;
+    overflow-y: auto;
+    margin: auto;
+  }
+  .modal-body { padding: 14px; }
+  .modal-footer { flex-direction: column; gap: 8px; }
+  .modal-footer .btn { width: 100%; }
+
+  /* Leaderboard */
+  .leaderboard-table { font-size: 13px; }
+  .leaderboard-table th, .leaderboard-table td { padding: 10px 6px; }
+
+  /* Login / Landing */
+  .login-card, .landing-hero {
+    padding: 24px 18px;
+    margin: 16px;
+  }
+  .login-card { width: auto; max-width: 100%; }
+  .landing-hero h1 { font-size: 28px; }
+  .landing-features { grid-template-columns: 1fr; }
+
+  /* Payments table (settings tab Thanh toán) */
+  .payments-table { font-size: 12px; }
+  .payments-table th, .payments-table td { padding: 10px 6px; }
+
+  /* Touch target: ensure buttons are tappable */
+  .btn, .btn-header, .btn-sm { min-height: 40px; }
+  input, textarea, select { font-size: 16px !important; } /* Avoid iOS zoom */
+}
+
+/* ----- PHONE (≤480px) ----- */
+@media (max-width: 480px) {
+  .header-inner { padding: 10px 12px; }
+  .logo span:last-child { font-size: 18px; }
+  .dash-stat { flex: 1 1 30%; min-width: 0; }
+  .dash-stat-num { font-size: 20px; }
+  .dash-stat-label { font-size: 11px; }
+  .quick-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .quick-tile { padding: 14px 10px; font-size: 12px; }
+  .recent-grid { grid-template-columns: 1fr; }
+  .dash-card-title { font-size: 14px; }
+  .settings-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .settings-tab { white-space: nowrap; }
+  .telegram-badge { align-self: flex-start; }
+}
+
+/* ----- IPHONE NOTCH SAFE AREA ----- */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .site-header { padding-top: env(safe-area-inset-top); }
+  .site-footer { padding-bottom: env(safe-area-inset-bottom); }
+}
