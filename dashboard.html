@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tổng quan — AVA Study</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23ffd60a%22 rx=%2220%22/><text x=%2250%22 y=%2270%22 font-size=%2260%22 text-anchor=%22middle%22 font-family=%22Arial Black%22 fill=%22%23000%22>A</text></svg>" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="dashboard.html" class="logo">
+        <span class="logo-mark">A</span>
+        <span>AVA</span>
+      </a>
+      <div class="header-actions" id="header-actions">
+        <span class="spinner"></span>
+      </div>
+    </div>
+  </header>
+
+  <main class="dashboard-layout">
+
+    <!-- ===== WELCOME CARD ===== -->
+    <section class="dash-welcome">
+      <div class="dash-welcome-left">
+        <h1 class="dash-greet">Xin chào, <span class="accent" id="greet-name">bạn</span> 👋</h1>
+        <p class="dash-greet-sub" id="greet-sub">Sẵn sàng học chưa? Hôm nay là một ngày tuyệt vời để tiến bộ.</p>
+        <div class="dash-stat-row">
+          <div class="dash-stat">
+            <div class="dash-stat-num" id="stat-courses">—</div>
+            <div class="dash-stat-label">Khóa đăng ký</div>
+          </div>
+          <div class="dash-stat">
+            <div class="dash-stat-num" id="stat-streak">—</div>
+            <div class="dash-stat-label">🔥 Chuỗi ngày</div>
+          </div>
+          <div class="dash-stat">
+            <div class="dash-stat-num" id="stat-completed">—</div>
+            <div class="dash-stat-label">Bài hoàn thành</div>
+          </div>
+        </div>
+      </div>
+      <div class="dash-welcome-right">
+        <a class="btn btn-primary" href="home.html">📚 Khám phá khóa học</a>
+      </div>
+    </section>
+
+    <!-- ===== LEVEL / XP CARD ===== -->
+    <section class="dash-level-card">
+      <div class="dash-level-header">
+        <div>
+          <div class="dash-level-label">Cấp độ hiện tại</div>
+          <div class="dash-level-num">Level <span id="level-num">1</span></div>
+        </div>
+        <div class="dash-level-xp">
+          <span id="xp-in-level">0</span> / <span id="xp-per-level">200</span> XP
+        </div>
+      </div>
+      <div class="dash-level-bar">
+        <div class="dash-level-fill" id="level-fill" style="width:0%"></div>
+      </div>
+      <div class="dash-level-foot">
+        Còn <strong><span id="xp-to-next">200</span> XP</strong> để lên Level <span id="level-next">2</span>
+      </div>
+    </section>
+
+    <!-- ===== QUICK GRID ===== -->
+    <section class="dash-grid">
+
+      <!-- Card: Continue learning -->
+      <div class="dash-card dash-card-continue">
+        <h2 class="dash-card-title">▶ Tiếp tục học</h2>
+        <div id="continue-container">
+          <div class="loading-screen" style="padding:20px"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- Card: Quick actions -->
+      <div class="dash-card">
+        <h2 class="dash-card-title">🚀 Truy cập nhanh</h2>
+        <div class="quick-grid">
+          <a class="quick-tile" href="home.html">
+            <div class="quick-icon">📚</div>
+            <div>Khóa học của tôi</div>
+          </a>
+          <a class="quick-tile" href="leaderboard.html">
+            <div class="quick-icon">🏆</div>
+            <div>Bảng xếp hạng</div>
+          </a>
+          <a class="quick-tile" href="settings.html">
+            <div class="quick-icon">⚙</div>
+            <div>Cài đặt tài khoản</div>
+          </a>
+          <a class="quick-tile" href="settings.html#payments">
+            <div class="quick-icon">💳</div>
+            <div>Lịch sử thanh toán</div>
+          </a>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ===== RECENT COURSES ===== -->
+    <section class="dash-recent">
+      <div class="dash-section-head">
+        <h2 class="dash-card-title">📚 Khóa học mới nhất</h2>
+        <a href="home.html" class="btn-link">Xem tất cả →</a>
+      </div>
+      <div class="recent-grid" id="recent-container">
+        <div class="loading-screen" style="padding:20px"><div class="spinner"></div></div>
+      </div>
+    </section>
+
+    <!-- ===== SUPPORT CARD ===== -->
+    <section class="dash-support">
+      <div class="dash-support-icon">💬</div>
+      <div class="dash-support-body">
+        <h3>Cần hỗ trợ?</h3>
+        <p>Liên hệ admin nếu bạn gặp vấn đề với khóa học, thanh toán, hoặc kỹ thuật.</p>
+      </div>
+      <a class="btn btn-secondary" href="mailto:lehoangviet.17042002@gmail.com?subject=AVA%20Study%20-%20Hỗ%20trợ">📧 Email admin</a>
+    </section>
+
+  </main>
+
+  <footer class="site-footer">AVA Study · Học để xếp hạng</footer>
+
+  <script type="module" src="assets/app.js"></script>
+  <script type="module">
+    import { initDashboardPage } from "./assets/dashboard.js";
+    initDashboardPage();
+  </script>
+</body>
+</html>
