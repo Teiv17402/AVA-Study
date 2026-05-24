@@ -49,6 +49,13 @@ export default async function handler(req) {
       skipped.push({ id: p.id, reason: 'recently_reminded' }); continue;
     }
 
+    // Phase A: tôn trọng opt-out email_promotions (coupon = khuyến mãi)
+    const userRes = await sb(`user_progress?user_id=eq.${p.user_id}&select=notification_prefs`, {}, SBKEY);
+    const prefs = userRes.body?.[0]?.notification_prefs || {};
+    if (prefs.email_promotions === false) {
+      skipped.push({ id: p.id, email: p.user_email, reason: 'opted_out_promotions' }); continue;
+    }
+
     // Generate 10% off coupon for this payment, valid 48h, max 1 use
     const couponCode = genCouponCode();
     const expiresAt = NOW + 48 * 60 * 60 * 1000;
