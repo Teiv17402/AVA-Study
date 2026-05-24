@@ -7,6 +7,10 @@
     {
       "path": "/api/inactive-reminder",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/abandoned-payment",
+      "schedule": "0 */6 * * *"
     }
   ]
 }
