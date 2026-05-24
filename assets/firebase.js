@@ -769,3 +769,175 @@ export async function submitQuizAnswers(lessonId, answers, durationMs) {
   if (!r.ok) throw new Error(json.error || 'Lỗi gửi bài quiz');
   return json;
 }
+
+
+
+// ============================================
+// PHASE A — SETTINGS + DASHBOARD HELPERS
+// ============================================
+
+/** Defaults notification prefs (mirror SQL default) */
+export const DEFAULT_NOTIF_PREFS = {
+  email_reminders:    true,
+  email_milestones:   true,
+  email_promotions:   true,
+  email_newsletter:   true,
+  push_messages:      true,
+  push_reminders:     true,
+  push_achievements:  true
+};
+
+/** Đọc profile mở rộng (Hồ sơ tab) */
+export async function fetchUserProfile(userId) {
+  const { data, error } = await supabase
+    .from('user_progress')
+    .select('user_id, email, display_name, photo_url, phone, bio, custom_name, custom_avatar, notification_prefs, created_at, streak_days, streak_longest, streak_last_date, xp_total')
+    .eq('user_id', userId).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    userId: data.user_id,
+    email: data.email,
+    displayName: data.display_name,
+    photoUrl: data.photo_url,
+    customName: data.custom_name || '',
+    customAvatar: data.custom_avatar || '',
+    phone: data.phone || '',
+    bio: data.bio || '',
+    notificationPrefs: { ...DEFAULT_NOTIF_PREFS, ...(data.notification_prefs || {}) },
+    createdAt: data.created_at,
+    streakDays: data.streak_days || 0,
+    streakLongest: data.streak_longest || 0,
+    streakLastDate: data.streak_last_date,
+    xpTotal: data.xp_total || 0
+  };
+}
+
+/** Update profile: name / phone / bio / customAvatar */
+export async function updateUserProfile(userId, patch) {
+  const fields = {};
+  if (patch.customName !== undefined)   fields.custom_name   = patch.customName;
+  if (patch.phone !== undefined)        fields.phone         = patch.phone;
+  if (patch.bio !== undefined)          fields.bio           = patch.bio;
+  if (patch.customAvatar !== undefined) fields.custom_avatar = patch.customAvatar;
+  fields.last_update = new Date().toISOString();
+  const { error } = await supabase.from('user_progress').update(fields).eq('user_id', userId);
+  if (error) throw error;
+}
+
+/** Update notification prefs */
+export async function updateNotificationPrefs(userId, prefs) {
+  const merged = { ...DEFAULT_NOTIF_PREFS, ...prefs };
+  const { error } = await supabase
+    .from('user_progress')
+    .update({ notification_prefs: merged, last_update: new Date().toISOString() })
+    .eq('user_id', userId);
+  if (error) throw error;
+  return merged;
+}
+
+/** Lấy lịch sử thanh toán của CHÍNH user (RLS đảm bảo user chỉ thấy của mình) */
+export async function fetchMyPayments(userId) {
+  const { data, error } = await supabase
+    .from('payments').select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(dbToFrontPayment);
+}
+
+/** Level/XP system — mỗi level = 200 XP, công thức chuẩn EXP-based */
+export const XP_PER_LEVEL = 200;
+
+export function calculateLevel(xpTotal) {
+  const xp = Math.max(0, xpTotal || 0);
+  const level = Math.floor(xp / XP_PER_LEVEL) + 1;
+  const xpInLevel = xp % XP_PER_LEVEL;
+  const xpToNext  = XP_PER_LEVEL - xpInLevel;
+  return {
+    level,
+    xpTotal: xp,
+    xpInLevel,
+    xpToNext,
+    xpPerLevel: XP_PER_LEVEL,
+    percent: Math.round((xpInLevel / XP_PER_LEVEL) * 100)
+  };
+}
+
+/** Tính XP từ progress (giống calculateScore, nhưng chỉ trả số) */
+export function computeXp(progress, courses) {
+  const s = calculateScore(progress || {}, courses || []);
+  return s.total;
+}
+
+/** Update streak khi user vào trang (gọi 1 lần / day) */
+export async function touchStreak(userId) {
+  const cur = await fetchUserProfile(userId);
+  if (!cur) return null;
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayStr = today.toISOString().slice(0,10);
+  const last = cur.streakLastDate || null;
+
+  let newStreak = cur.streakDays || 0;
+  let newLongest = cur.streakLongest || 0;
+
+  if (last === todayStr) {
+    return { streakDays: newStreak, streakLongest: newLongest, changed: false };
+  }
+
+  if (last) {
+    const lastDate = new Date(last + 'T00:00:00');
+    const diffDays = Math.round((today - lastDate) / (24 * 60 * 60 * 1000));
+    if (diffDays === 1) newStreak += 1;            // liên tiếp
+    else if (diffDays > 1) newStreak = 1;          // gãy chuỗi → reset
+  } else {
+    newStreak = 1;
+  }
+  if (newStreak > newLongest) newLongest = newStreak;
+
+  const { error } = await supabase.from('user_progress').update({
+    streak_days: newStreak,
+    streak_longest: newLongest,
+    streak_last_date: todayStr,
+    last_update: new Date().toISOString()
+  }).eq('user_id', userId);
+  if (error) console.warn('touchStreak:', error);
+
+  return { streakDays: newStreak, streakLongest: newLongest, changed: true };
+}
+
+/** Cache XP về DB (gọi sau khi mark lesson completed / nộp quiz) */
+export async function syncXpCache(userId, xp) {
+  const { error } = await supabase.from('user_progress')
+    .update({ xp_total: xp, last_update: new Date().toISOString() })
+    .eq('user_id', userId);
+  if (error) console.warn('syncXpCache:', error);
+}
+
+/** Xóa account (Bảo mật tab) — chỉ xóa data, KHÔNG xóa Supabase auth user
+ *  (xóa auth phải dùng service role → user phải bấm "Xóa" rồi liên hệ admin)
+ *  Trước mắt: reset hết data + ghi log để admin xử lý.
+ */
+export async function requestAccountDeletion(userId, userEmail, reason) {
+  // Reset progress
+  await supabase.from('user_progress').update({
+    completed: [], unlocked_at: {}, paid_lessons: [], paid_courses: [],
+    quiz_scores: {}, quiz_attempts: {}, streak_days: 0, xp_total: 0,
+    notification_prefs: { email_reminders: false, email_milestones: false,
+      email_promotions: false, email_newsletter: false,
+      push_messages: false, push_reminders: false, push_achievements: false },
+    last_update: new Date().toISOString()
+  }).eq('user_id', userId);
+
+  // Log để admin xóa Supabase auth user thủ công
+  await supabase.from('admin_notifications').insert([{
+    type: 'account_deletion_request', severity: 'high',
+    user_id: userId, user_email: userEmail,
+    message: `User ${userEmail} yêu cầu xóa account. Lý do: ${reason || '(không nhập)'}. Vào Supabase → Auth → Users → Delete user.`,
+    read: false
+  }]);
+
+  // Logout
+  await supabase.auth.signOut();
+}
